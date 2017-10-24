@@ -1,0 +1,14 @@
+.g-config-breadcrumb-container
+
+.panel-group#g-wt-homedir-options
+  .panel.panel-default
+    .panel-heading
+      .panel-title WholeTale Home Directory Configuration
+      .panel-body
+        form#g-wt-homedir-config-form.g-wt-homedir-config-form(role="form")
+          .form-group
+            label.control-label(for="g-wt-homedir-root") Home Directories Root
+            input#g-wt-homedir-root.input-sm.form-control(
+                type="text", placeholder="Home Directories Root")
+          p#g-wt-homedir-error-message.g-validation-failed-message()
+          input.btn.btn-sm.btn-primary(type="submit", value="Save")
