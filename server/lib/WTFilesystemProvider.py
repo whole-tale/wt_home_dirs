@@ -156,6 +156,9 @@ class WTFileResource(_WTDAVResource, FileResource):
 class WTFilesystemProvider(FilesystemProvider):
     def __init__(self, rootDir):
         FilesystemProvider.__init__(self, rootDir)
+        self.updateAssetstore()
+
+    def updateAssetstore(self):
         assetstore = [
             _ for _ in Assetstore().list()
             if _.get('root', '').rstrip('/') == self.rootFolderPath
