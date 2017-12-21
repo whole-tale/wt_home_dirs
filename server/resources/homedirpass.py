@@ -3,7 +3,6 @@
 
 
 from girder.api.rest import Resource
-from girder.api.rest import filtermodel, loadmodel
 from girder.constants import AccessType
 from girder.api import access
 from girder.api.describe import Description, describeRoute

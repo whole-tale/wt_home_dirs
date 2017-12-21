@@ -2,6 +2,7 @@ from girder.utility.model_importer import ModelImporter
 from girder.models.model_base import AccessException
 import datetime
 
+
 class WTDomainController(object):
     def __init__(self):
         self.userModel = ModelImporter.model('user')
@@ -40,7 +41,7 @@ class WTDomainController(object):
         token = self._getToken(password[6:])
         if token is None:
             return False
-        if not 'userId' in token:
+        if 'userId' not in token:
             return False
         user = self._getUser(username)
         if token['userId'] != user['_id']:
@@ -70,7 +71,7 @@ class WTDomainController(object):
         if now > token['expires']:
             try:
                 del self.tokenCache[tokenStr]
-            except:
+            except KeyError:
                 pass
             return None
         return token
