@@ -1,10 +1,13 @@
 from wsgidav.middleware import BaseMiddleware
-from girder.api.rest import *
+import cherrypy
+from girder.api.rest import getCurrentUser
+
 
 # Some of the dict-like objects in cherrypy don't implement pop()
 def safeDelAttr(dict, key):
     if hasattr(dict, key):
         delattr(dict, key)
+
 
 class TokenValidator(BaseMiddleware):
     def __init__(self, application, config):

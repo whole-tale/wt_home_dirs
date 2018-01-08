@@ -52,4 +52,3 @@ class Authorizer(BaseMiddleware):
                                               ('Date', util.getRfc1123Time()),
                                               ])
         return [body]
-

@@ -1,6 +1,7 @@
 from wsgidav.middleware import BaseMiddleware
 import os
 
+
 class DirectoryInitializer(BaseMiddleware):
     def __init__(self, application, config):
         BaseMiddleware.__init__(self, application, config)
