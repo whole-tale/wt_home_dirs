@@ -42,7 +42,6 @@ var ConfigView = View.extend({
                 list: JSON.stringify(this.SETTING_KEYS)
             }
         }).done(_.bind(function (resp) {
-            console.log('Settings: ', resp);
             this.settingVals = resp;
             this.render();
         }, this));
