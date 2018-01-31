@@ -16,7 +16,7 @@ var ConfigView = View.extend({
     ],
 
     settingControlId: function (key) {
-        return '#g-wt-homedir-' + key.substring(5).replace(/_/g, '-');
+        return '#g-' + key.replace(/\./g, '-');
     },
 
     events: {
