@@ -27,7 +27,7 @@ var PasswordManagementView = View.extend({
         this.$('#g-pm-password').val('');
         restRequest({
             type: 'GET',
-            path: 'homedirpass/generate',
+            url: 'homedirpass/generate',
         }).done(_.bind(function (resp) {
             this.$('#g-pm-gpassword').val(resp['password']);
         }, this));
@@ -36,7 +36,7 @@ var PasswordManagementView = View.extend({
         this.$('#g-pm-gpassword').val('');
         restRequest({
             type: 'PUT',
-            path: 'homedirpass/set',
+            url: 'homedirpass/set',
             data: {
                 password: JSON.stringify(password)
             }

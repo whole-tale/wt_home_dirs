@@ -37,7 +37,7 @@ var ConfigView = View.extend({
     initialize: function () {
         restRequest({
             type: 'GET',
-            path: 'system/setting',
+            url: 'system/setting',
             data: {
                 list: JSON.stringify(this.SETTING_KEYS)
             }
@@ -82,7 +82,7 @@ var ConfigView = View.extend({
     _saveSettings: function (providerId, settings) {
         restRequest({
             type: 'PUT',
-            path: 'system/setting',
+            url: 'system/setting',
             data: {
                 list: JSON.stringify(settings)
             },
@@ -94,7 +94,7 @@ var ConfigView = View.extend({
                 type: 'success',
                 timeout: 3000
             });
-        }, this)).error(_.bind(function (resp) {
+        }, this)).fail(_.bind(function (resp) {
             this.$('#g-wt-homedir-config-error-message').text(resp.responseJSON.message);
         }, this));
     }
