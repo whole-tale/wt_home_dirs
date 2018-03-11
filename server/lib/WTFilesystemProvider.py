@@ -1,15 +1,19 @@
 import os
 import stat
-import pathlib
+
+import datetime
 from wsgidav.fs_dav_provider import \
     FilesystemProvider, FolderResource, FileResource
 from wsgidav import compat, util
+from girder import logger
 from girder.utility import path as path_util
 from girder.exceptions import ResourcePathNotFound
 from girder.models.assetstore import Assetstore
 from girder.models.file import File
 from girder.models.folder import Folder
 from girder.models.item import Item
+from .PathMapper import PathMapper
+from .WTAssetstoreTypes import WTAssetstoreTypes
 
 
 PROP_EXECUTABLE = '{http://apache.org/dav/props/}executable'
@@ -17,6 +21,9 @@ PROP_EXECUTABLE = '{http://apache.org/dav/props/}executable'
 
 # A mixin to deal with the executable property for WT*Resource
 class _WTDAVResource:
+    def __init__(self, pathMapper):
+        self.pathMapper = pathMapper
+
     def getPropertyNames(self, isAllProp):
         props = super().getPropertyNames(isAllProp)
         props.append(PROP_EXECUTABLE)
@@ -51,16 +58,16 @@ class _WTDAVResource:
         self.filestat = os.stat(self._filePath)
 
     def _refToGirderPath(self):
-        path = pathlib.Path(self.getRefUrl())
-        return '/user/{}/Home/{}'.format(
-            path.parts[1], os.sep.join(path.parts[2:])).rstrip(os.sep)
+        return self.pathMapper.davToGirder(self.getRefUrl())
+
     def getUser(self):
         return self.environ['WT_DAV_USER_DICT']
 
 
 class WTFolderResource(_WTDAVResource, FolderResource):
-    def __init__(self, path, environ, fp):
+    def __init__(self, path, environ, fp, pathMapper):
         FolderResource.__init__(self, path, environ, fp)
+        _WTDAVResource.__init__(self, pathMapper)
 
     # Override to return proper objects when doing recursive listings.
     # One would have thought that FilesystemProvider.getResourceInst() was
@@ -70,9 +77,9 @@ class WTFolderResource(_WTDAVResource, FolderResource):
         fp = os.path.join(self._filePath, compat.to_unicode(name))
         path = util.joinUri(self.path, name)
         if os.path.isdir(fp):
-            res = WTFolderResource(path, self.environ, fp)
+            res = WTFolderResource(path, self.environ, fp, self.pathMapper)
         elif os.path.isfile(fp):
-            res = WTFileResource(path, self.environ, fp)
+            res = WTFileResource(path, self.environ, fp, self.pathMapper)
         else:
             res = None
         return res
@@ -117,8 +124,9 @@ class WTFolderResource(_WTDAVResource, FolderResource):
 
 
 class WTFileResource(_WTDAVResource, FileResource):
-    def __init__(self, path, environ, fp):
+    def __init__(self, path, environ, fp, pathMapper):
         FileResource.__init__(self, path, environ, fp)
+        _WTDAVResource.__init__(self, pathMapper)
 
     def delete(self):
         try:
@@ -158,21 +166,40 @@ class WTFileResource(_WTDAVResource, FileResource):
 
 # Adds support for 'executable' property
 class WTFilesystemProvider(FilesystemProvider):
-    def __init__(self, rootDir):
+    def __init__(self, rootDir, pathMapper: PathMapper, assetstoreType: int):
         FilesystemProvider.__init__(self, rootDir)
+        self.pathMapper = pathMapper
+        self.assetstoreType = assetstoreType
+        # must do this after setting the above
         self.updateAssetstore()
 
     def updateAssetstore(self):
         assetstore = [
             _ for _ in Assetstore().list()
-            if _.get('root', '').rstrip('/') == self.rootFolderPath
+            if _.get('root', '').rstrip('/') == self.rootFolderPath and self.isProperAssetstore(_)
         ]
         if not assetstore:
-            assetstore = Assetstore().createDirectFSAssetstore(
-                'WT Home Dirs', self.rootFolderPath)
+            assetstore = self.createAssetstore()
         else:
             assetstore = assetstore.pop()
         self.assetstore = assetstore
+
+    def isProperAssetstore(self, assetstore):
+        return assetstore['type'] in WTAssetstoreTypes.ALL
+
+    def createAssetstore(self):
+        logger.info('Creating assetstore %d' % self.assetstoreType)
+        dict = {
+            'type': self.assetstoreType,
+            'created': datetime.datetime.utcnow(),
+            'name': self.pathMapper.getRealm() + ' wtassetstore',
+            'root': self.rootFolderPath,
+            'perms': None
+        }
+        return Assetstore().save(dict)
+
+    def getAssetstore(self):
+        return self.assetstore
 
     def getResourceInst(self, path, environ):
         """Return info dictionary for path.
@@ -185,5 +212,8 @@ class WTFilesystemProvider(FilesystemProvider):
             return None
 
         if os.path.isdir(fp):
-            return WTFolderResource(path, environ, fp)
-        return WTFileResource(path, environ, fp)
+            return WTFolderResource(path, environ, fp, self.pathMapper)
+        return WTFileResource(path, environ, fp, self.pathMapper)
+
+    def _locToFilePath(self, path, environ=None):
+        return FilesystemProvider._locToFilePath(self, self.pathMapper.davToPhysical(path), environ)

@@ -3,4 +3,5 @@
 
 
 class PluginSettings:
-    HOME_DIRS_ROOT = 'wt.homedir.root'
+    HOME_DIRS_ROOT = 'wthome.homedir_root'
+    TALE_DIRS_ROOT = 'wthome.taledir_root'
