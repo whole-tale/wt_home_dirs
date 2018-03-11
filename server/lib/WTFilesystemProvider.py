@@ -104,7 +104,15 @@ class WTFolderResource(_WTDAVResource, FolderResource):
             folder = path_util.lookUpPath(self._refToGirderPath(), force=True)
             Folder().remove(folder['document'])
         except ResourcePathNotFound:
-            pass  # TODO: do something about it?
+            # delete folder if it exists, since we won't get a notification from Girder in
+            # this case
+            self._delete()
+        # Don't remove the folder here. Girder will post an event whose handler will
+        # call _delete(), unless, of course, that fails
+        # self._delete()
+
+    # girder bypass
+    def _delete(self):
         FolderResource.delete(self)
 
 
