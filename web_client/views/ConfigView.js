@@ -12,11 +12,12 @@ import '../stylesheets/configView.styl';
 
 var ConfigView = View.extend({
     SETTING_KEYS: [
-        'wt.homedir.root'
+        'wthome.homedir_root',
+        'wthome.taledir_root'
     ],
 
     settingControlId: function (key) {
-        return '#g-' + key.replace(/\./g, '-');
+        return '#g-wt-homedir-' + key.replace(/wthome\./g, '').replace(/_/g, '-');
     },
 
     events: {

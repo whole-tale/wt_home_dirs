@@ -7,8 +7,12 @@
       .panel-body
         form#g-wt-homedir-config-form.g-wt-homedir-config-form(role="form")
           .form-group
-            label.control-label(for="g-wt-homedir-root") Home Directories Root
-            input#g-wt-homedir-root.input-sm.form-control(
+            label.control-label(for="g-wt-homedir-homedir-root") Home Directories Root
+            input#g-wt-homedir-homedir-root.input-sm.form-control(
                 type="text", placeholder="Home Directories Root")
+          .form-group
+            label.control-label(for="g-wt-homedir-taledir-root") Tale Directories Root
+            input#g-wt-homedir-taledir-root.input-sm.form-control(
+                type="text", placeholder="Tale Directories Root")
           p#g-wt-homedir-error-message.g-validation-failed-message()
           input.btn.btn-sm.btn-primary(type="submit", value="Save")
