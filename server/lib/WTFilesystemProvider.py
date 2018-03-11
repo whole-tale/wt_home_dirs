@@ -54,6 +54,8 @@ class _WTDAVResource:
         path = pathlib.Path(self.getRefUrl())
         return '/user/{}/Home/{}'.format(
             path.parts[1], os.sep.join(path.parts[2:])).rstrip(os.sep)
+    def getUser(self):
+        return self.environ['WT_DAV_USER_DICT']
 
 
 class WTFolderResource(_WTDAVResource, FolderResource):
@@ -76,25 +78,23 @@ class WTFolderResource(_WTDAVResource, FolderResource):
         return res
 
     def createCollection(self, name):
+        logger.debug('%s -> createCollection(%s)' % (self.getRefUrl(), name))
         try:
             folder = path_util.lookUpPath(self._refToGirderPath(), force=True)
-            user = path_util.lookUpPath(
-                '/user/%s' % self.environ['wsgidav.username'], force=True)
             Folder().createFolder(
                 parent=folder['document'], name=name, parentType='folder',
-                creator=user['document'])
+                creator=self.getUser())
         except ResourcePathNotFound:
             pass  # TODO: do something about it?
         FolderResource.createCollection(self, name)
 
     def createEmptyResource(self, name):
+        logger.debug('%s -> createEmptyResource(%s)' % (self.getRefUrl(), name))
         try:
             folder = path_util.lookUpPath(self._refToGirderPath(), force=True)
-            user = path_util.lookUpPath(
-                '/user/%s' % self.environ['wsgidav.username'], force=True)
             Item().createItem(
                 folder=folder['document'], name=name,
-                creator=user['document'])
+                creator=self.getUser())
         except ResourcePathNotFound:
             pass  # TODO: do something about it?
         return FolderResource.createEmptyResource(self, name)
@@ -130,9 +130,6 @@ class WTFileResource(_WTDAVResource, FileResource):
         try:
             item = path_util.lookUpPath(self._refToGirderPath(), force=True)
             item = item.pop('document')
-            user = path_util.lookUpPath(
-                '/user/%s' % self.environ['wsgidav.username'], force=True)
-            user = user.pop('document')
 
             FSProvider = self.environ['wsgidav.provider']
             # WTFileResource already has file stat object but it's stale,
@@ -140,7 +137,7 @@ class WTFileResource(_WTDAVResource, FileResource):
             stat = os.stat(self._filePath)
 
             file = File().createFile(
-                name=self.name, creator=user, item=item, reuseExisting=True,
+                name=self.name, creator=self.getUser(), item=item, reuseExisting=True,
                 size=stat.st_size, assetstore=FSProvider.assetstore,
                 saveFile=False)
             file['path'] = FSProvider.rootFolderPath + self.path

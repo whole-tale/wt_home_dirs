@@ -28,14 +28,19 @@ class WTDomainController(object):
         raise Exception('Digest authentication is disabled')
 
     def authDomainUser(self, realmname, username, password, environ):
+        success = False
         if password.startswith('token:'):
-            return self._authenticateToken(username, password)
+            success = self._authenticateToken(username, password)
         else:
             try:
                 self.passwordModel.authenticate(username, password)
-                return True
+                success = True
             except AccessException:
-                return False
+                success = False
+
+        if success:
+            environ['WT_DAV_USER_DICT'] = self._getUser(username)
+        return success
 
     def _authenticateToken(self, username, password):
         token = self._getToken(password[6:])
