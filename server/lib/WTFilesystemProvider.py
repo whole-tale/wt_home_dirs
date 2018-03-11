@@ -148,7 +148,7 @@ class WTFileResource(_WTDAVResource, FileResource):
                 name=self.name, creator=self.getUser(), item=item, reuseExisting=True,
                 size=stat.st_size, assetstore=FSProvider.assetstore,
                 saveFile=False)
-            file['path'] = FSProvider.rootFolderPath + self.path
+            file['path'] = self._filePath
             file['mtime'] = stat.st_mtime
             # file['imported'] = True
             File().save(file)
