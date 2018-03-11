@@ -4,7 +4,8 @@ import datetime
 
 
 class WTDomainController(object):
-    def __init__(self):
+    def __init__(self, realm):
+        self.realm = realm
         self.userModel = ModelImporter.model('user')
         self.passwordModel = ModelImporter.model('password', 'wt_home_dir')
         self.tokenModel = ModelImporter.model('token')
@@ -15,7 +16,7 @@ class WTDomainController(object):
         return self.__class__.__name__
 
     def getDomainRealm(self, inputURL, environ):
-        return 'homes'
+        return self.realm
 
     def requireAuthentication(self, realmname, environ):
         return True
