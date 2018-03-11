@@ -1,5 +1,6 @@
 from wsgidav.middleware import BaseMiddleware
 from wsgidav import compat, util
+import pathlib
 
 _logger = util.getModuleLogger(__name__, True)
 
@@ -27,13 +28,11 @@ class Authorizer(BaseMiddleware):
         if userName is None or userName == '':
             body = self.buildMustAuthenticateBody(path)
             return self.sendNotAuthorizedResponse(body, environ, start_response)
-        # allow /<userName> and /<userName>/*
-        # should probably check that login names don't allow things like '../../etc'
-        if path == ('/%s' % userName) or path.startswith('/%s/' % userName):
-            return self.application(environ, start_response)
-        else:
-            body = self.buildNotAuthorizedResponseBody(userName, path)
-            return self.sendNotAuthorizedResponse(body, environ, start_response)
+
+        return self._checkAccess(userName, path, environ, start_response)
+
+    def _checkAccess(self, userName, path, environ, start_response):
+        pass
 
     def buildNotAuthorizedResponseBody(self, userName, path):
         return 'User \'%s\' is not authorized to access %s\n' % (userName, path)
@@ -52,3 +51,40 @@ class Authorizer(BaseMiddleware):
                                               ('Date', util.getRfc1123Time()),
                                               ])
         return [body]
+
+
+class HomeAuthorizer(Authorizer):
+    def __init__(self, application, config):
+        Authorizer.__init__(self, application, config)
+
+    def _checkAccess(self, userName, path, environ, start_response):
+        # allow /<userName> and /<userName>/*
+        # should probably check that login names don't allow things like '../../etc'
+        if path == ('/%s' % userName) or path.startswith('/%s/' % userName):
+            return self.application(environ, start_response)
+        else:
+            body = self.buildNotAuthorizedResponseBody(userName, path)
+            return self.sendNotAuthorizedResponse(body, environ, start_response)
+
+class TaleAuthorizer(Authorizer):
+    def __init__(self, application, config):
+        Authorizer.__init__(self, application, config)
+
+    def _checkAccess(self, userName, spath: str, environ, start_response):
+        # allow /<tale> and /<tale>/* if user has access to tale
+        # should restrict to RO access
+        path = pathlib.Path(spath)
+        taleId = self.getTaleId(path)
+
+        if len(path.parts) < 2:
+            body = self.buildNotAuthorizedResponseBody(userName, path)
+            return self.sendNotAuthorizedResponse(body, environ, start_response)
+
+        if path == ('/%s' % userName) or path.startswith('/%s/' % userName):
+            return self.application(environ, start_response)
+        else:
+            body = self.buildNotAuthorizedResponseBody(userName, path)
+            return self.sendNotAuthorizedResponse(body, environ, start_response)
+
+    def getTaleId(self, path: pathlib.Path):
+        taleName = path.parts[1]
