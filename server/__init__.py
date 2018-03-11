@@ -23,7 +23,7 @@ from .lib.WTAssetstoreTypes import WTAssetstoreTypes
 from .lib.WTAssetstoreAdapter import WTHomeAssetstoreAdapter, WTTaleAssetstoreAdapter
 from .lib.EventHandlers import *
 from .resources.homedirpass import Homedirpass
-from girder.utility.assetstore_utilities import *
+from girder.utility import assetstore_utilities
 
 HOME_DIRS_APPS = []
 
@@ -95,8 +95,10 @@ def setDefaults():
     SettingDefault.defaults[PluginSettings.TALE_DIRS_ROOT] = '/tmp/wt-tale-dirs'
 
 def addAssetstores():
-    setAssetstoreAdapter(WTAssetstoreTypes.WT_HOME_ASSETSTORE, WTHomeAssetstoreAdapter)
-    setAssetstoreAdapter(WTAssetstoreTypes.WT_TALE_ASSETSTORE, WTTaleAssetstoreAdapter)
+    assetstore_utilities.setAssetstoreAdapter(WTAssetstoreTypes.WT_HOME_ASSETSTORE,
+                                              WTHomeAssetstoreAdapter)
+    assetstore_utilities.setAssetstoreAdapter(WTAssetstoreTypes.WT_TALE_ASSETSTORE,
+                                              WTTaleAssetstoreAdapter)
 
 def load(info):
     events.bind('model.folder.remove', 'wt_home_dir', pathRouter(FolderDeleteHandler()))
