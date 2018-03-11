@@ -20,7 +20,6 @@ class _WTDAVResource:
     def getPropertyNames(self, isAllProp):
         props = super().getPropertyNames(isAllProp)
         props.append(PROP_EXECUTABLE)
-        print('%s: %s' % (self._filePath, props))
         return props
 
     def getPropertyValue(self, propname):
