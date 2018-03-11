@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-
 from girder.api.rest import Resource
 from girder.constants import AccessType
 from girder.api import access
