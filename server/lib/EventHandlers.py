@@ -22,8 +22,10 @@ class EventHandler:
     def getResource(self, event: Event):
         raise Exception('Not implemented')
 
-    def getResourceInstance(self, girderPath: pathlib.Path, pathMapper,
+    def getResourceInstance(self, girderPath: pathlib.Path | str, pathMapper,
                             provider: WTFilesystemProvider):
+        if isinstance(girderPath, str):
+            girderPath = pathlib.Path(girderPath)
         return provider.getResourceInst(pathMapper.girderToDav(girderPath),
                                         {'wsgidav.provider': provider})
 
