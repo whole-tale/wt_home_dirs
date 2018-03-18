@@ -30,9 +30,11 @@ class DirectoryInitializer(BaseMiddleware):
         # first filter to be aware of the mapping, do it here
         return self.application(environ, start_response)
 
+
 class HomeDirectoryInitializer(DirectoryInitializer):
     def __init__(self, application, config):
         DirectoryInitializer.__init__(self, application, config, HomePathMapper())
+
 
 class TaleDirectoryInitializer(DirectoryInitializer):
     def __init__(self, application, config):

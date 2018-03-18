@@ -66,6 +66,7 @@ class HomeAuthorizer(Authorizer):
             body = self.buildNotAuthorizedResponseBody(userName, path)
             return self.sendNotAuthorizedResponse(body, environ, start_response)
 
+
 class TaleAuthorizer(Authorizer):
     def __init__(self, application, config):
         Authorizer.__init__(self, application, config)

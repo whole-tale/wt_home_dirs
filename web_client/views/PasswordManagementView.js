@@ -1,8 +1,7 @@
 import _ from 'underscore';
 
 import View from 'girder/views/View';
-import { wrap } from 'girder/utilities/PluginUtils';
-import { apiRoot, restRequest } from 'girder/rest';
+import restRequest from 'girder/rest';
 import events from 'girder/events';
 
 import PasswordManagementViewTemplate from '../templates/passwordManagementView.pug';
@@ -14,25 +13,25 @@ var PasswordManagementView = View.extend({
         },
         'click #g-pm-set': function (event) {
             this._setPassword($('#g-pm-password').val());
-        },
+        }
     },
     initialize: function () {
         this.render();
     },
-    render: function() {
+    render: function () {
         this.$el.html(PasswordManagementViewTemplate());
         return this;
     },
-    _generatePassword: function() {
+    _generatePassword: function () {
         this.$('#g-pm-password').val('');
         restRequest({
             type: 'GET',
-            url: 'homedirpass/generate',
+            url: 'homedirpass/generate'
         }).done(_.bind(function (resp) {
             this.$('#g-pm-gpassword').val(resp['password']);
         }, this));
     },
-    _setPassword: function(password) {
+    _setPassword: function (password) {
         this.$('#g-pm-gpassword').val('');
         restRequest({
             type: 'PUT',

@@ -11,15 +11,6 @@ import '../stylesheets/configView.styl';
 // should probably have an abstract version of this file
 
 var ConfigView = View.extend({
-    SETTING_KEYS: [
-        'wthome.homedir_root',
-        'wthome.taledir_root'
-    ],
-
-    settingControlId: function (key) {
-        return '#g-wt-homedir-' + key.replace(/wthome\./g, '').replace(/_/g, '-');
-    },
-
     events: {
         'submit .g-wt-homedir-config-form': function (event) {
             event.preventDefault();
@@ -46,6 +37,15 @@ var ConfigView = View.extend({
             this.settingVals = resp;
             this.render();
         }, this));
+    },
+
+    SETTING_KEYS: [
+        'wthome.homedir_root',
+        'wthome.taledir_root'
+    ],
+
+    settingControlId: function (key) {
+        return '#g-wt-homedir-' + key.replace(/wthome\./g, '').replace(/_/g, '-');
     },
 
     render: function () {
@@ -101,4 +101,3 @@ var ConfigView = View.extend({
 });
 
 export default ConfigView;
-

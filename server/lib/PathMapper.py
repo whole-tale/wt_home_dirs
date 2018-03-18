@@ -1,6 +1,7 @@
 import pathlib
 from girder.plugins.wholetale.constants import WORKSPACE_NAME
 
+
 class PathMapper:
     def __init__(self):
         pass
@@ -36,9 +37,8 @@ class PathMapper:
 
 
 class HomePathMapper(PathMapper):
-
     def __init__(self):
-        pass
+        PathMapper.__init__(self)
 
     def girderToDav(self, path: pathlib.Path):
         # /user/<username>/Home/<path> -> /<username>/<path>
@@ -60,10 +60,10 @@ class HomePathMapper(PathMapper):
     def getRealm(self):
         return 'homes'
 
-class TalePathMapper(PathMapper):
 
+class TalePathMapper(PathMapper):
     def __init__(self):
-        pass
+        PathMapper.__init__(self)
 
     def girderToDav(self, path: pathlib.Path):
         # /tale/<taleName>/<WORKSPACE_NAME>/... -> /...

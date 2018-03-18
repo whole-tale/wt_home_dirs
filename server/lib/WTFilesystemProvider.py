@@ -170,6 +170,7 @@ class WTFilesystemProvider(FilesystemProvider):
         FilesystemProvider.__init__(self, rootDir)
         self.pathMapper = pathMapper
         self.assetstoreType = assetstoreType
+        self.assetstore = None
         # must do this after setting the above
         self.updateAssetstore()
 

@@ -25,7 +25,7 @@ class EventHandler:
     def getResourceInstance(self, girderPath: pathlib.Path, pathMapper,
                             provider: WTFilesystemProvider):
         return provider.getResourceInst(pathMapper.girderToDav(girderPath),
-                                       {'wsgidav.provider': provider})
+                                        {'wsgidav.provider': provider})
 
     def getPhysicalPath(self, girderPath, pathMapper, provider) -> str:
         return provider._locToFilePath(pathMapper.girderToDav(girderPath),
@@ -62,6 +62,7 @@ class EventHandler:
 #       - copyItem
 #
 
+
 class FolderDeleteHandler(EventHandler):
     def getResourceType(self, event: Event):
         return 'folder'
@@ -76,6 +77,7 @@ class FolderDeleteHandler(EventHandler):
         res = self.getResourceInstance(path, pathMapper, provider)
         if res is not None and isinstance(res, DAVCollection):
             res._delete()
+
 
 class FolderSaveHandler(EventHandler):
     def getResourceType(self, event: Event):
@@ -127,6 +129,7 @@ class FolderSaveHandler(EventHandler):
         davPath = pathMapper.girderToDav(girderSrcPath)
         res.moveRecursive(davPath.parent.joinpath(newName))
 
+
 class ItemSaveHandler(EventHandler):
     def getResourceType(self, event: Event):
         return 'item'
@@ -153,7 +156,7 @@ class ItemSaveHandler(EventHandler):
             raise IOError('Found a folder where a file was expected: %s' % path)
 
     def moveItem(self, src: dict, dst: dict, newName: str, pathMapper,
-                   provider: WTFilesystemProvider):
+                 provider: WTFilesystemProvider):
         girderSrcPath = path_util.getResourcePath('item', src, force=True)
         girderDstPath = path_util.getResourcePath('item', dst, force=True)
 
@@ -169,7 +172,6 @@ class ItemSaveHandler(EventHandler):
         davPath = pathMapper.girderToDav(girderSrcPath)
         self.assertIsValidFile(res, girderSrcPath)
         res.moveRecursive(davPath.parent.joinpath(newName))
-
 
 
 class AssetstoreQueryHandler(EventHandler):

@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import cherrypy
+import os
+import pathlib
 from wsgidav.wsgidav_app import DEFAULT_CONFIG, WsgiDAVApp
 from wsgidav.dir_browser import WsgiDavDirBrowser
 from wsgidav.debug_filter import WsgiDavDebugFilter
@@ -21,7 +23,8 @@ from .lib.WTFilesystemProvider import WTFilesystemProvider
 from .lib.PathMapper import HomePathMapper, TalePathMapper
 from .lib.WTAssetstoreTypes import WTAssetstoreTypes
 from .lib.WTAssetstoreAdapter import WTHomeAssetstoreAdapter, WTTaleAssetstoreAdapter
-from .lib.EventHandlers import *
+from .lib.EventHandlers import Event, EventHandler, FolderSaveHandler, FolderDeleteHandler
+from .lib.EventHandlers import ItemSaveHandler, AssetstoreQueryHandler
 from .resources.homedirpass import Homedirpass
 from girder.utility import assetstore_utilities
 
@@ -54,11 +57,13 @@ class AppsList:
 
 HOME_DIRS_APPS = AppsList()
 
+
 @setting_utilities.validator({
     PluginSettings.HOME_DIRS_ROOT,
 })
 def validateOtherSettings(event):
     pass
+
 
 def pathRouter(h: EventHandler):
     def handler(event: Event):
@@ -68,8 +73,8 @@ def pathRouter(h: EventHandler):
                 provider = e.app.providerMap['/']['provider']
                 logger.debug('Handling %s (%s) using %s' % (event, path, provider.rootFolderPath))
                 try:
-                    h.run(event, path, pathMapper, provider)
-                except Exception as ex:
+                    h.run(event, path, e.pathMapper, provider)
+                except Exception:
                     # hey, girder, when you have stuff like this that can be asynchroneous you
                     # need a mechanism to propagate errors so that the exception doesn't end up
                     # ignored in your event dispatch thread
@@ -77,6 +82,7 @@ def pathRouter(h: EventHandler):
                 return
 
     return handler
+
 
 def startDAVServer(rootPath, directoryInitializer, authorizer, pathMapper, assetstoreType: int):
     if not os.path.exists(rootPath):
@@ -109,6 +115,7 @@ def startDAVServer(rootPath, directoryInitializer, authorizer, pathMapper, asset
     HOME_DIRS_APPS.add(realm, pathMapper, app)
     cherrypy.tree.graft(WsgiDAVApp(config), '/' + realm)
 
+
 def setDefaults():
     if 'GIRDER_TEST_ASSETSTORE' in os.environ:
         assetstoreName = os.environ.get('GIRDER_TEST_ASSETSTORE', 'test')
@@ -120,11 +127,13 @@ def setDefaults():
 
     SettingDefault.defaults[PluginSettings.TALE_DIRS_ROOT] = '/tmp/wt-tale-dirs'
 
+
 def addAssetstores():
     assetstore_utilities.setAssetstoreAdapter(WTAssetstoreTypes.WT_HOME_ASSETSTORE,
                                               WTHomeAssetstoreAdapter)
     assetstore_utilities.setAssetstoreAdapter(WTAssetstoreTypes.WT_TALE_ASSETSTORE,
                                               WTTaleAssetstoreAdapter)
+
 
 def load(info):
     events.bind('model.folder.remove', 'wt_home_dir', pathRouter(FolderDeleteHandler()))
@@ -154,4 +163,3 @@ def load(info):
     info['apiRoot'].homedirpass = hdp
     info['apiRoot'].homedirpass.route('GET', ('generate',), hdp.generatePassword)
     info['apiRoot'].homedirpass.route('PUT', ('set',), hdp.setPassword)
-

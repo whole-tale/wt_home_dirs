@@ -6,7 +6,6 @@ import filelock
 import stat
 import shutil
 
-from girder import logger
 from girder.models.upload import Upload
 from girder.models.item import Item
 from girder.models.folder import Folder
@@ -89,9 +88,11 @@ class WTAssetstoreAdapter(DirectFSAssetstoreAdapter):
 
         return file
 
+
 class WTHomeAssetstoreAdapter(WTAssetstoreAdapter):
     def __init__(self, assetstore):
         WTAssetstoreAdapter.__init__(self, assetstore, HomePathMapper())
+
 
 class WTTaleAssetstoreAdapter(WTAssetstoreAdapter):
     def __init__(self, assetstore):
