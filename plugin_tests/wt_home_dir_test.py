@@ -34,8 +34,9 @@ class IntegrationTestCase(base.TestCase):
 
         # girder.plugins is not available until setUp is running
         global PluginSettings
-        from girder.plugins.wt_home_dir import HOME_DIRS_APP
-        HOME_DIRS_APP.providerMap['/']['provider'].updateAssetstore()
+        from girder.plugins.wt_home_dir import HOME_DIRS_APPS
+        for e in HOME_DIRS_APPS.entries():
+            e.app.providerMap['/']['provider'].updateAssetstore()
 
         users = ({
             'email': 'root@dev.null',

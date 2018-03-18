@@ -25,8 +25,34 @@ from .lib.EventHandlers import *
 from .resources.homedirpass import Homedirpass
 from girder.utility import assetstore_utilities
 
-HOME_DIRS_APPS = []
 
+class AppEntry:
+    def __init__(self, realm: str, pathMapper, app):
+        self.realm = realm
+        self.pathMapper = pathMapper
+        self.app = app
+
+
+class AppsList:
+    def __init__(self):
+        self.list = []
+        self.map = {}
+
+    def add(self, realm: str, pathMapper, app):
+        self.addEntry(AppEntry(realm, pathMapper, app))
+
+    def addEntry(self, appEntry: AppEntry):
+        self.list.append(appEntry)
+        self.map[appEntry.realm] = appEntry
+
+    def entries(self):
+        return self.list
+
+    def getApp(self, realm: str):
+        return self.map[realm]
+
+
+HOME_DIRS_APPS = AppsList()
 
 @setting_utilities.validator({
     PluginSettings.HOME_DIRS_ROOT,
@@ -37,9 +63,9 @@ def validateOtherSettings(event):
 def pathRouter(h: EventHandler):
     def handler(event: Event):
         path = pathlib.Path(h.getPath(event))
-        for (pathMapper, app) in HOME_DIRS_APPS:
-            if pathMapper.girderPathMatches(path):
-                provider = app.providerMap['/']['provider']
+        for e in HOME_DIRS_APPS.entries():
+            if e.pathMapper.girderPathMatches(path):
+                provider = e.app.providerMap['/']['provider']
                 logger.debug('Handling %s (%s) using %s' % (event, path, provider.rootFolderPath))
                 try:
                     h.run(event, path, pathMapper, provider)
@@ -80,7 +106,7 @@ def startDAVServer(rootPath, directoryInitializer, authorizer, pathMapper, asset
     })
     global HOME_DIRS_APPS
     app = WsgiDAVApp(config)
-    HOME_DIRS_APPS.append((pathMapper, app))
+    HOME_DIRS_APPS.add(realm, pathMapper, app)
     cherrypy.tree.graft(WsgiDAVApp(config), '/' + realm)
 
 def setDefaults():
