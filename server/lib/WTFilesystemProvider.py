@@ -88,9 +88,11 @@ class WTFolderResource(_WTDAVResource, FolderResource):
         logger.debug('%s -> createCollection(%s)' % (self.getRefUrl(), name))
         try:
             folder = path_util.lookUpPath(self._refToGirderPath(), force=True)
+            # avoid recursive dav -> girder -> dav folder creation by passing a flag
+            # in the description to prevent the event handler from creating the same folder
             Folder().createFolder(
-                parent=folder['document'], name=name, parentType='folder',
-                creator=self.getUser())
+                parent=folder['document'], name=name, description='__WT_HOME__',
+                parentType='folder', creator=self.getUser())
         except ResourcePathNotFound:
             pass  # TODO: do something about it?
         FolderResource.createCollection(self, name)

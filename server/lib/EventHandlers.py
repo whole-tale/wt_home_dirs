@@ -91,6 +91,9 @@ class FolderSaveHandler(EventHandler):
 
     def run(self, event: Event, path: pathlib.Path, pathMapper, provider: WTFilesystemProvider):
         folder = self.getResource(event)
+        if folder['description'] == '__WT_HOME__':
+            folder['description'] = ''
+            return
         if '_id' not in folder:
             self.createFolder(path, pathMapper, provider)
         else:
