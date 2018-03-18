@@ -1,5 +1,6 @@
 import os
 import pathlib
+from typing import Union
 from wsgidav.dav_provider import DAVCollection
 from girder.events import Event
 from girder.utility import path as path_util
@@ -22,7 +23,7 @@ class EventHandler:
     def getResource(self, event: Event):
         raise Exception('Not implemented')
 
-    def getResourceInstance(self, girderPath: pathlib.Path | str, pathMapper,
+    def getResourceInstance(self, girderPath: Union[pathlib.Path, str], pathMapper,
                             provider: WTFilesystemProvider):
         if isinstance(girderPath, str):
             girderPath = pathlib.Path(girderPath)
