@@ -57,6 +57,9 @@ class IntegrationTestCase(base.TestCase):
     def tearDown(self):
         base.TestCase.tearDown(self)
 
+    def physicalPath(self, userName, path):
+        return '%s/%s/%s/%s' % (self.assetstorePath, userName[0], userName, path)
+
     def testHomeDir(self):
         from webdavfs.webdavfs import WebDAVFS
         token = Token().createToken(self.user)
@@ -73,9 +76,8 @@ class IntegrationTestCase(base.TestCase):
             # exists in WebDAV
             self.assertEqual(handle.listdir('.'), ['ala'])
             # exists on the backend
-            self.assertTrue(
-                os.path.isdir(
-                    self.assetstorePath + '/{login}/ala'.format(**self.user)))
+            physDirPath = self.physicalPath(self.user['login'], 'ala')
+            self.assertTrue(os.path.isdir(physDirPath))
             # exists in Girder
             resp = self.request(
                 path='/resource/lookup', method='GET', user=self.user,
@@ -88,9 +90,7 @@ class IntegrationTestCase(base.TestCase):
             # gone from WebDAV
             self.assertEqual(handle.listdir('.'), [])
             # gone from the backend
-            self.assertFalse(
-                os.path.isdir(
-                    self.assetstorePath + '/{login}/ala'.format(**self.user)))
+            self.assertFalse(os.path.isdir(physDirPath))
             # gone from Girder
             resp = self.request(
                 path='/resource/lookup', method='GET', user=self.user,
@@ -112,8 +112,8 @@ class IntegrationTestCase(base.TestCase):
 
             self.assertEqual(handle.listdir('.'), ['test_dir'])
             self.assertEqual(handle.listdir('test_dir'), ['test_file.txt'])
-            fabspath = self.assetstorePath + '/{login}/test_dir/test_file.txt'
-            self.assertTrue(os.path.isfile(fabspath.format(**self.user)))
+            fAbsPath = self.physicalPath(self.user['login'], 'test_dir/test_file.txt')
+            self.assertTrue(os.path.isfile(fAbsPath))
 
             gabspath = '/user/{login}/Home/test_dir/test_file.txt'
             resp = self.request(
@@ -139,21 +139,20 @@ class IntegrationTestCase(base.TestCase):
                 user=self.user, params={'contentDisposition': 'inline'},
                 isJson=False)
             self.assertStatusOk(resp)
-            with open(fabspath.format(**self.user), 'r') as fp:
+            with open(fAbsPath, 'r') as fp:
                 self.assertEqual(self.getBody(resp), fp.read())
 
             resp = self.request(
                 path='/item/{_id}'.format(**item), method='DELETE',
                 user=self.user)
             self.assertStatusOk(resp)
-            self.assertFalse(os.path.isfile(fabspath.format(**self.user)))
+            self.assertFalse(os.path.isfile(fAbsPath))
 
-            fabspath = os.path.dirname(fabspath)
-            self.assertTrue(os.path.isdir(fabspath.format(**self.user)))
-            gabspath = os.path.dirname(gabspath)
+            fAbsPath = os.path.dirname(fAbsPath)
+            self.assertTrue(os.path.isdir(fAbsPath))
 
             resp = self.request(
                 path='/folder/{folderId}'.format(**item), method='DELETE',
                 user=self.user)
             self.assertStatusOk(resp)
-            self.assertFalse(os.path.isdir(fabspath.format(**self.user)))
+            self.assertFalse(os.path.isdir(fAbsPath))
