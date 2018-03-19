@@ -4,6 +4,7 @@
 import cherrypy
 import os
 import pathlib
+import tempfile
 from wsgidav.wsgidav_app import DEFAULT_CONFIG, WsgiDAVApp
 from wsgidav.dir_browser import WsgiDavDirBrowser
 from wsgidav.debug_filter import WsgiDavDebugFilter
@@ -118,15 +119,20 @@ def startDAVServer(rootPath, directoryInitializer, authorizer, pathMapper, asset
 
 
 def setDefaults():
-    if 'GIRDER_TEST_ASSETSTORE' in os.environ:
-        assetstoreName = os.environ.get('GIRDER_TEST_ASSETSTORE', 'test')
-        assetstorePath = os.path.join(
-            ROOT_DIR, 'tests', 'assetstore', assetstoreName)
-        SettingDefault.defaults[PluginSettings.HOME_DIRS_ROOT] = assetstorePath
-    else:
-        SettingDefault.defaults[PluginSettings.HOME_DIRS_ROOT] = '/tmp/wt-home-dirs'
-
-    SettingDefault.defaults[PluginSettings.TALE_DIRS_ROOT] = '/tmp/wt-tale-dirs'
+    for (name, key) in [('home', PluginSettings.HOME_DIRS_ROOT),
+                        ('tale', PluginSettings.TALE_DIRS_ROOT)]:
+        if 'GIRDER_TEST_ASSETSTORE' in os.environ:
+            # roots for testing; they need to be initialized here because the tests
+            # would have to load the plugin first which would mean that this method
+            # would already have been called before being able to make calls to relevant
+            # methods
+            assetstorePath = os.path.join(ROOT_DIR, 'tests', 'assetstore')
+            # make sure we start with a clean slate
+            assetstorePath = tempfile.mkdtemp(prefix=name, dir=assetstorePath)
+            SettingDefault.defaults[key] = assetstorePath
+        else:
+            # normal /tmp/wt-home-dirs, /tmp/wt-tale-dirs
+            SettingDefault.defaults[key] = '/tmp/wt-%s-dirs' % name
 
 
 def addAssetstores():
