@@ -74,10 +74,11 @@ def pathRouter(h: EventHandler):
                 logger.debug('Handling %s (%s) using %s' % (event, path, provider.rootFolderPath))
                 try:
                     h.run(event, path, e.pathMapper, provider)
-                except Exception:
+                except Exception as ex:
                     # hey, girder, when you have stuff like this that can be asynchroneous you
                     # need a mechanism to propagate errors so that the exception doesn't end up
                     # ignored in your event dispatch thread
+                    logger.warning('Exception caught while handling event %s: %s' % (event, ex))
                     raise
                 return
 
