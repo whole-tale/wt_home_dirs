@@ -3,13 +3,14 @@
 import os
 from tests import base
 from girder import config
-from girder.constants import ROOT_DIR
-from girder.models.assetstore import Assetstore
 from girder.models.token import Token
 from webdavfs.webdavfs import WebDAVFS
 
 os.environ['GIRDER_PORT'] = os.environ.get('GIRDER_PORT', '30001')
 config.loadConfig()  # Reload config to pick up correct port
+
+FILE_CONTENTS = ''.join(['0123456789abcdefghijklmnopqrstuvxyz' for i in range(10)])
+
 
 def setUpModule():
     base.enabledPlugins.append('wholetale')
@@ -21,6 +22,7 @@ def tearDownModule():
     base.stopServer()
 
 
+# why I didn't go with FS and a simple layer on top, I'm not sure
 class Adapter:
     def __init__(self, realm, pathMapper, app, user: dict):
         self.realm = realm
@@ -28,49 +30,94 @@ class Adapter:
         self.app = app
         self.user = user
         self.userName = user['login']
+        self.name = '-'
 
-    def mkdir(self, name):
+    def mkdir(self, path):
         raise NotImplementedError()
 
-    def rmdir(self, name):
+    def rmdir(self, path):
         raise NotImplementedError()
 
-    def isdir(self, name):
+    def isdir(self, path):
         raise NotImplementedError()
 
-    def exists(self, name):
+    def isfile(self, path):
+        raise NotImplementedError()
+
+    def exists(self, path):
+        raise NotImplementedError()
+
+    def size(self, path):
         raise NotImplementedError()
 
     def renamedir(self, src, dst):
         raise NotImplementedError()
 
     def mvdir(self, dir, dst):
+        raise NotImplementedError()
+
+    def mvfile(self, src, dst):
+        raise NotImplementedError()
+
+    def mkfile(self, path, data):
+        raise NotImplementedError()
+
+    def getfile(self, path):
+        raise NotImplementedError()
+
+    def rm(self, path):
+        raise NotImplementedError()
+
+    def renamefile(self, src, dst):
         raise NotImplementedError()
 
 
 class FSAdapter(Adapter):
-    def __init__(self, realm, pathMapper, app, user: dict, clean=False):
+    def __init__(self, realm, pathMapper, app, user: dict):
         Adapter.__init__(self, realm, pathMapper, app, user)
         provider = app.providerMap['/']['provider']
         self.root = provider.rootFolderPath + '/' + pathMapper.davToPhysical(self.userName)
+        self.name = 'FS'
 
-    def mkdir(self, name):
+    def mkdir(self, path):
         # this one is read-only
         raise NotImplementedError()
 
-    def rmdir(self, name):
+    def rmdir(self, path):
         raise NotImplementedError()
 
-    def isdir(self, name):
-        return os.path.isdir(self.root + '/' + name)
+    def isdir(self, path):
+        return os.path.isdir(self.root + '/' + path)
 
-    def exists(self, name):
-        return os.path.exists(self.root + '/' + name)
+    def isfile(self, path):
+        return os.path.isfile(self.root + '/' + path)
+
+    def exists(self, path):
+        return os.path.exists(self.root + '/' + path)
+
+    def size(self, path):
+        return os.path.getsize(self.root + '/' + path)
 
     def renamedir(self, src, dst):
         raise NotImplementedError()
 
     def mvdir(self, dir, dst):
+        raise NotImplementedError()
+
+    def mvfile(self, src, dst):
+        raise NotImplementedError()
+
+    def mkfile(self, path, data):
+        raise NotImplementedError()
+
+    def getfile(self, path):
+        with open(self.root + '/' + path) as f:
+            return f.read()
+
+    def rm(self, path):
+        os.remove(self.root + '/' + path)
+
+    def renamefile(self, src, dst):
         raise NotImplementedError()
 
 
@@ -85,6 +132,7 @@ class DAVAdapter(Adapter):
         if not self.handle.isdir('test'):
             raise Exception('Basic DAV test failed')
         self.handle.removedir('test')
+        self.name = 'DAV'
 
     def mkdir(self, path):
         self.handle.makedir(path)
@@ -95,8 +143,14 @@ class DAVAdapter(Adapter):
     def isdir(self, path):
         return self.handle.isdir(path)
 
+    def isfile(self, path):
+        return self.handle.isfile(path)
+
     def exists(self, path):
         return self.handle.exists(path)
+
+    def size(self, path):
+        return self.handle.getsize(path)
 
     def renamedir(self, src, dst):
         # see mvdir
@@ -110,7 +164,27 @@ class DAVAdapter(Adapter):
         # whatever FS does). Anyway, bypass it.
         dir = self.handle.validatepath(dir)
         dst = self.handle.validatepath(dst)
+        # handle.client.move() does not check reply for errors!
         self.handle.client.move(dir, dst)
+
+    def mvfile(self, src, dst):
+        self.handle.move(src, dst, overwrite=False)
+
+    def mkfile(self, path, data):
+        with self.handle.open(path, 'w') as fp:
+            fsize = fp.write(data)
+            if fsize != len(data):
+                raise Exception('Could not write all data to DAV file')
+
+    def getfile(self, path):
+        with self.handle.open(path) as f:
+            return f.read()
+
+    def rm(self, path):
+        self.handle.remove(path)
+
+    def renamefile(self, src, dst):
+        self.handle.move(src, dst, overwrite=False)
 
 
 class GirderAdapter(Adapter):
@@ -120,6 +194,7 @@ class GirderAdapter(Adapter):
         self.rootDir = rootDir
         resp = self.getResource(rootDir)
         self.rootId = resp.json['_id']
+        self.name = 'Girder'
 
     def getResource(self, path, canFail=False):
         if canFail:
@@ -129,8 +204,9 @@ class GirderAdapter(Adapter):
             return self.mustSucceed(path='/resource/lookup', method='GET', user=self.user,
                                     params={'path': path})
 
-    def mustSucceed(self, path, method, user, params):
-        resp = self.client.request(path=path, method=method, user=user, params=params)
+    def mustSucceed(self, path, method, user, params=None, isJson=True, body=None):
+        resp = self.client.request(path=path, method=method, user=user, params=params,
+                                   isJson=isJson, body=body)
         if not resp.status.startswith('200'):
             raise Exception('Request failed with status %s: %s' % (resp.status, resp.body))
 
@@ -139,43 +215,105 @@ class GirderAdapter(Adapter):
     def canFail(self, path, method, user, params):
         return self.client.request(path=path, method=method, user=user, params=params)
 
-    def mkdir(self, name):
-        self.mustSucceed(path='/folder', method='POST', user=self.user,
-                         params={'parentId': self.rootId, 'name': name})
-
-    def rmdir(self, name):
-        resp = self.getResource('%s/%s' % (self.rootDir, name))
+    def getFolder(self, path):
+        resp = self.getResource('%s/%s' % (self.rootDir, path))
         if not resp.json['_modelType'] == 'folder':
-            raise Exception('Not a folder: %s' % name)
+            raise Exception('Not a folder: %s' % path)
+        return resp
+
+    def getFile(self, path):
+        resp = self.getResource('%s/%s' % (self.rootDir, path))
+        if not resp.json['_modelType'] == 'item':
+            raise Exception('Not an item: %s' % path)
+        return resp
+
+    def mkdir(self, path):
+        parentPath = os.path.dirname(path)
+        name = os.path.basename(path)
+        # this method assumes parent exists
+        resp = self.getFolder(parentPath)
+        self.mustSucceed(path='/folder', method='POST', user=self.user,
+                         params={'parentId': resp.json['_id'], 'name': name})
+
+    def rmdir(self, path):
+        resp = self.getFolder(path)
         self.mustSucceed(path='/folder/%s' % resp.json['_id'], method='DELETE', user=self.user,
                          params=None)
 
-    def isdir(self, name):
-        resp = self.getResource('%s/%s' % (self.rootDir, name))
+    def isdir(self, path):
+        resp = self.getResource('%s/%s' % (self.rootDir, path))
         return resp.json['_modelType'] == 'folder'
 
-    def exists(self, name):
-        resp = self.getResource('%s/%s' % (self.rootDir, name), canFail=True)
+    def isfile(self, path):
+        resp = self.getResource('%s/%s' % (self.rootDir, path))
+        return resp.json['_modelType'] == 'item'
+
+    def exists(self, path):
+        resp = self.getResource('%s/%s' % (self.rootDir, path), canFail=True)
         return resp.status.startswith('200')
 
+    def size(self, path):
+        resp = self.getResource('%s/%s' % (self.rootDir, path), canFail=True)
+        if not resp.status.startswith('200'):
+            raise Exception('Could not get resource for %s' % path)
+        return resp.json['size']
+
     def renamedir(self, src, dst):
-        resp = self.getResource('%s/%s' % (self.rootDir, src))
-        if not resp.json['_modelType'] == 'folder':
-            raise Exception('Not a folder: %s' % src)
+        resp = self.getFolder(src)
         self.mustSucceed(path='/folder/%s' % resp.json['_id'], method='PUT', user=self.user,
                          params={'name': dst})
 
     def mvdir(self, dir, dst):
-        resp = self.getResource('%s/%s' % (self.rootDir, dir))
-        if not resp.json['_modelType'] == 'folder':
-            raise Exception('Not a folder: %s' % dir)
+        # must convert from "unified" semantics of "dir becomes dst" to girder semantics
+        # of dir gets moved into dirname(dst)
+        print('girder.mvdir(%s, %s)' % (dir, dst))
+        resp = self.getFolder(dir)
         srcId = resp.json['_id']
-        resp = self.getResource('%s/%s' % (self.rootDir, dst))
-        if not resp.json['_modelType'] == 'folder':
-            raise Exception('Not a folder: %s' % dst)
+        dstDir = os.path.dirname(dst)
+        newName = os.path.basename(dst)
+        resp = self.getFolder(dstDir)
         dstId = resp.json['_id']
         self.mustSucceed(path='/folder/%s' % srcId, method='PUT', user=self.user,
-                         params={'parentType': 'folder', 'parentId': dstId})
+                         params={'name': newName, 'parentType': 'folder', 'parentId': dstId})
+
+    def mvfile(self, src, dst):
+        print('girder.mvfile(%s, %s)' % (src, dst))
+        resp = self.getFile(src)
+        srcId = resp.json['_id']
+        dstDir = os.path.dirname(dst)
+        newName = os.path.basename(dst)
+        resp = self.getFolder(dstDir)
+        dstId = resp.json['_id']
+        self.mustSucceed(path='/item/%s' % srcId, method='PUT', user=self.user,
+                         params={'name': newName, 'folderId': dstId})
+
+    def mkfile(self, path, data):
+        parentPath = os.path.dirname(path)
+        parent = self.getFolder(parentPath)
+        name = os.path.basename(path)
+        resp = self.client.uploadFile(name, data, user=self.user, parent=parent.json,
+                                      parentType='folder')
+        if '_id' not in resp:
+            raise Exception('Request failed with response %s' % resp)
+
+    def getfile(self, path):
+        resp = self.getFile(path)
+        resp = self.mustSucceed(path='/item/%s/download' % resp.json['_id'], method='GET',
+                                user=self.user,
+                                params={'contentDisposition': 'inline'}, isJson=False)
+        s = ''
+        for chunk in resp.body:
+            s = s + chunk.decode('utf8')
+        return s
+
+    def rm(self, path):
+        resp = self.getFile(path)
+        self.mustSucceed(path='/item/%s' % resp.json['_id'], method='DELETE', user=self.user)
+
+    def renamefile(self, src, dst):
+        resp = self.getFile(src)
+        self.mustSucceed(path='/item/%s' % resp.json['_id'], method='PUT', user=self.user,
+                         params={'name': dst})
 
 
 # Tests:
@@ -186,6 +324,8 @@ class GirderAdapter(Adapter):
 #   - same for files
 #   - content check for files
 #   * test for all apps
+#   TODO: test recursive copy/move
+#   TODO: write tests which check that Alice can't mess with Bob's files
 
 
 class IntegrationTestCase(base.TestCase):
@@ -195,13 +335,14 @@ class IntegrationTestCase(base.TestCase):
         self.homeDirsApps = HOME_DIRS_APPS  # nopep8
         # We need to recreate DirectFS assetstore, which was dropped in
         # base.TestCase.setUp...
-        assetstoreName = os.environ.get('GIRDER_TEST_ASSETSTORE', 'test')
-        self.assetstorePath = os.path.join(
-            ROOT_DIR, 'tests', 'assetstore', assetstoreName)
 
         # girder.plugins is not available until setUp is running
         for e in self.homeDirsApps.entries():
-            e.app.providerMap['/']['provider'].updateAssetstore()
+            provider = e.app.providerMap['/']['provider']
+            provider.updateAssetstore()
+            if e.realm == 'homes':
+                self.homesRoot = provider.rootFolderPath
+                self.homesPathMapper = e.pathMapper
 
         users = ({
             'email': 'root@dev.null',
@@ -230,8 +371,9 @@ class IntegrationTestCase(base.TestCase):
     def tearDown(self):
         base.TestCase.tearDown(self)
 
-    def physicalPath(self, userName, path):
-        return '%s/%s/%s/%s' % (self.assetstorePath, userName[0], userName, path)
+    def homesPhysicalPath(self, userName, path):
+        return '%s/%s' % (self.homesRoot,
+                          self.homesPathMapper.davToPhysical('%s/%s' % (userName, path)))
 
     def forallapps(self, fn):
         print('Running %s' % fn.__name__)
@@ -265,7 +407,8 @@ class IntegrationTestCase(base.TestCase):
                                      self.getDAVRootDir(realm))
         self.girderAdapter = GirderAdapter(realm, pathMapper, app, user, self,
                                            self.getGirderRootDir(realm))
-        self.fsAdapter = FSAdapter(realm, pathMapper, app, user, clean=True)
+        self.fsAdapter = FSAdapter(realm, pathMapper, app, user)
+        self.allAdapters = [self.davAdapter, self.girderAdapter, self.fsAdapter]
 
     # make directory with one adapter and check that it exists with all of them
     def mkdir(self, mainAdapter, name):
@@ -273,17 +416,37 @@ class IntegrationTestCase(base.TestCase):
         mainAdapter.mkdir(name)
         self.ensureIsDir(name)
 
+    def mkfile(self, mainAdapter, name, data):
+        print('mkfile(%s)' % name)
+        mainAdapter.mkfile(name, data)
+        self.ensureIsFile(name, len(data))
+        self.ensureFileContentEqualTo(name, data)
+
+    def rm(self, mainAdapter, name):
+        print('rm(%s)' % name)
+        mainAdapter.rm(name)
+        self.ensureNotExists(name)
+
     def ensureExists(self, name):
         print('ensureExists(%s)' % name)
-        self.assertTrue(self.davAdapter.exists(name))
-        self.assertTrue(self.girderAdapter.exists(name))
-        self.assertTrue(self.fsAdapter.exists(name))
+        for adapter in self.allAdapters:
+            self.assertTrue(adapter.exists(name))
 
     def ensureIsDir(self, name):
         print('ensureIsDir(%s)' % name)
-        self.assertTrue(self.davAdapter.isdir(name))
-        self.assertTrue(self.girderAdapter.isdir(name))
-        self.assertTrue(self.fsAdapter.isdir(name))
+        for adapter in self.allAdapters:
+            self.assertTrue(adapter.isdir(name), msg='Not a directory %s' % name)
+
+    def ensureIsFile(self, name, size=None):
+        print('ensureIsFile(%s)' % name)
+        for adapter in self.allAdapters:
+            self.assertTrue(adapter.isfile(name), msg='(%s) Not a file %s' % (adapter.name, name))
+            if size:
+                self.assertEqual(adapter.size(name), size, msg='File size for %s differs' % name)
+
+    def ensureFileContentEqualTo(self, name, data):
+        for adapter in self.allAdapters:
+            self.assertEqual(adapter.getfile(name), data, msg='File content differs')
 
     def rmdir(self, mainAdapter, name):
         mainAdapter.rmdir(name)
@@ -291,9 +454,9 @@ class IntegrationTestCase(base.TestCase):
 
     def ensureNotExists(self, name):
         print('ensureNotExists(%s)' % name)
-        self.assertFalse(self.davAdapter.exists(name))
-        self.assertFalse(self.girderAdapter.exists(name))
-        self.assertFalse(self.fsAdapter.exists(name))
+        for adapter in self.allAdapters:
+            self.assertFalse(adapter.exists(name),
+                             msg='(%s) File should not exist: %s' % (adapter.name, name))
 
     def test00FolderCreateRemoveDav(self):
         self.forallapps(self._testFolderCreateRemoveDav)
@@ -329,7 +492,6 @@ class IntegrationTestCase(base.TestCase):
         self.forallapps(self._testFolderRenameDav)
 
     def _testFolderRenameDav(self):
-        # TODO: well, the dav -> girder link isn't implemented o this one
         self._testFolderRename(self.davAdapter, 'testdir4', 'testdir5')
 
     def _testFolderRename(self, adapter, src, dst):
@@ -355,24 +517,78 @@ class IntegrationTestCase(base.TestCase):
         self.forallapps(self._testFolderMoveGirder)
 
     def _testFolderMoveGirder(self):
-        self._testFolderMove(self.girderAdapter, 'testdir8', 'testdir9', 'testdir10')
+        self._testFolderMove(self.girderAdapter, 'testdir11', 'testdir12', 'testdir13')
 
     def _testFolderMove(self, adapter, dir1, dir2, dir3):
         self.mkdir(adapter, dir1)
         self.mkdir(adapter, dir1 + '/' + dir2)
         self.mkdir(adapter, dir3)
-        adapter.mvdir(dir1 + '/' + dir2, dir3)
-        self.ensureIsDir(dir3 + '/' + dir1)
+        # semantics here for webdav are src becomes dest, not src is moved into dest
+        adapter.mvdir(dir1 + '/' + dir2, dir3 + '/' + dir2)
+        self.ensureIsDir(dir3 + '/' + dir2)
         self.ensureNotExists(dir1 + '/' + dir2)
-        self.rmdir(dir1)
-        self.rmdir(dir3 + '/' + dir1)
-        self.rmdir(dir3)
+        self.rmdir(adapter, dir1)
+        self.rmdir(adapter, dir3 + '/' + dir2)
+        self.rmdir(adapter, dir3)
 
-    def test07Files(self):
-        self.forallapps(self._testFiles)
+    def test07FileCreateRemoveDav(self):
+        self.forallapps(self._testFileCreateRemoveDav)
 
-    def _testFiles(self):
-        pass
+    def _testFileCreateRemoveDav(self):
+        self._testFileCreateRemove(self.davAdapter, 'testfile1.txt')
+
+    def test08FileCreateRemoveGirder(self):
+        self.forallapps(self._testFileCreateRemoveGirder)
+
+    def _testFileCreateRemoveGirder(self):
+        self._testFileCreateRemove(self.girderAdapter, 'testfile2.txt')
+
+    def _testFileCreateRemove(self, adapter, name):
+        self.mkfile(adapter, name, FILE_CONTENTS)
+        self.rm(adapter, name)
+
+    def test09FileRenameDav(self):
+        self.forallapps(self._testFileRenameDav)
+
+    def _testFileRenameDav(self):
+        self._testFileRename(self.davAdapter, 'testfile3.txt', 'testfile4.txt')
+
+    def _testFileRename(self, adapter, src, dst):
+        self.mkfile(adapter, src, FILE_CONTENTS)
+        adapter.renamefile(src, dst)
+        self.ensureIsFile(dst)
+        self.ensureNotExists(src)
+        self.rm(adapter, dst)
+
+    def test10FileRenameGirder(self):
+        self.forallapps(self._testFileRenameGirder)
+
+    def _testFileRenameGirder(self):
+        self._testFileRename(self.girderAdapter, 'testfile6.txt', 'testfile7.txt')
+
+    def test11FileMoveDav(self):
+        self.forallapps(self._testFileMoveDav)
+
+    def _testFileMoveDav(self):
+        self._testFileMove(self.davAdapter, 'testdirf1', 'testfile8.txt', 'testdirf2')
+
+    def test12FileMoveGirder(self):
+        self.forallapps(self._testFileMoveGirder)
+
+    def _testFileMoveGirder(self):
+        self._testFileMove(self.girderAdapter, 'testdirf3', 'testfile9.txt', 'testdirf4')
+
+    def _testFileMove(self, adapter, dir1, file2, dir3):
+        self.mkdir(adapter, dir1)
+        self.mkfile(adapter, dir1 + '/' + file2, FILE_CONTENTS)
+        self.mkdir(adapter, dir3)
+        # semantics here for webdav are src becomes dest, not src is moved into dest
+        adapter.mvfile(dir1 + '/' + file2, dir3 + '/' + file2)
+        self.ensureIsFile(dir3 + '/' + file2)
+        self.ensureNotExists(dir1 + '/' + file2)
+        self.rmdir(adapter, dir1)
+        self.rm(adapter, dir3 + '/' + file2)
+        self.rmdir(adapter, dir3)
 
     def test08HomeDir(self):
         resp = self.request(
@@ -388,7 +604,7 @@ class IntegrationTestCase(base.TestCase):
             # exists in WebDAV
             self.assertEqual(handle.listdir('.'), ['ala'])
             # exists on the backend
-            physDirPath = self.physicalPath(self.user['login'], 'ala')
+            physDirPath = self.homesPhysicalPath(self.user['login'], 'ala')
             self.assertTrue(os.path.isdir(physDirPath))
             # exists in Girder
             resp = self.request(
@@ -424,7 +640,7 @@ class IntegrationTestCase(base.TestCase):
 
             self.assertEqual(handle.listdir('.'), ['test_dir'])
             self.assertEqual(handle.listdir('test_dir'), ['test_file.txt'])
-            fAbsPath = self.physicalPath(self.user['login'], 'test_dir/test_file.txt')
+            fAbsPath = self.homesPhysicalPath(self.user['login'], 'test_dir/test_file.txt')
             self.assertTrue(os.path.isfile(fAbsPath))
 
             gabspath = '/user/{login}/Home/test_dir/test_file.txt'
