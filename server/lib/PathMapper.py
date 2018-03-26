@@ -18,13 +18,22 @@ class PathMapper:
     def girderToPhysical(self, path: pathlib.Path):
         return self.davToPhysical(self.girderToDav(path))
 
-    def addPrefix(self, s: str, n):
-        if len(s) == 0:
-            raise Exception('Invalid argument')
-        if s[0] == '/':
-            return '/%s/%s' % (s[1:n+1], s[1:])
+    def addPrefix(self, s: pathlib.PurePosixPath, n) -> pathlib.PurePosixPath:
+        if s.is_absolute():
+            if len(s.parts) == 1:
+                raise Exception('Invalid argument')
+            prefix = s.parts[1]
         else:
-            return '%s/%s' % (s[0:n], s)
+            prefix = s.parts[0]
+
+        assert len(prefix) != 0
+        if len(prefix) > n:
+            prefix = prefix[0:n]
+
+        if s.is_absolute():
+            return pathlib.PurePosixPath('/', prefix, *s.parts[1:])
+        else:
+            return pathlib.PurePosixPath(prefix, *s.parts)
 
     def getSubdir(self, environ: dict):
         raise Exception('Not implemented')
