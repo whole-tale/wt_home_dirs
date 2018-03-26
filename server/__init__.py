@@ -112,6 +112,9 @@ def startDAVServer(rootPath, directoryInitializer, authorizer, pathMapper, asset
         'domaincontroller': WTDomainController(realm),
         'server': 'cherrypy'
     })
+    # Increase verbosity when running tests.
+    if 'GIRDER_TEST_ASSETSTORE' in os.environ:
+        config.update({'verbose': 2})
     global HOME_DIRS_APPS
     app = WsgiDAVApp(config)
     HOME_DIRS_APPS.add(realm, pathMapper, app)
