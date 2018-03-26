@@ -163,9 +163,6 @@ def load(info):
     startDAVServer(taleDirsRoot, TaleDirectoryInitializer, TaleAuthorizer, TalePathMapper(),
                    WTAssetstoreTypes.WT_TALE_ASSETSTORE)
 
-    tree = cherrypy.tree
-    print(tree)
-
     hdp = Homedirpass()
     info['apiRoot'].homedirpass = hdp
     info['apiRoot'].homedirpass.route('GET', ('generate',), hdp.generatePassword)
