@@ -66,7 +66,7 @@ class HomePathMapper(PathMapper):
         return self.addPrefix(environ['WT_DAV_AUTHORIZED_USER'], 1)
 
     def girderPathMatches(self, path: pathlib.Path):
-        return len(path.parts) > 4 and path.parts[1] == 'user' and path.parts[3] == 'Home'
+        return len(path.parts) >= 4 and path.parts[1] == 'user' and path.parts[3] == 'Home'
 
     def getRealm(self):
         return 'homes'
@@ -97,7 +97,7 @@ class TalePathMapper(PathMapper):
 
     def girderPathMatches(self, path: pathlib.Path):
         # we may want to allow removal of the whole thing, and, maybe also in the case of users
-        return len(path.parts) > 4 and path.parts[1] == 'tale' and path.parts[3] == WORKSPACE_NAME
+        return len(path.parts) >= 4 and path.parts[1] == 'tale' and path.parts[3] == WORKSPACE_NAME
 
     def getRealm(self):
         return 'tales'
