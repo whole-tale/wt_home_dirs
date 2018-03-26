@@ -25,6 +25,19 @@ class WTAssetstoreAdapter(DirectFSAssetstoreAdapter):
         DirectFSAssetstoreAdapter.__init__(self, assetstore)
         self.pathMapper = pathMapper
 
+    def _getAbsPath(self, parentId, parentType, name):
+        if parentType == 'folder':
+            parent = Folder().load(id=parentId, force=True)
+        else:
+            parent = Item().load(id=parentId, force=True)
+        fullPath = path_lib.getResourcePath(parentType, parent, force=True)
+        if name is not None:
+            fullPath = pathlib.Path(os.path.join(fullPath, name))
+        path = self.pathMapper.girderToPhysical(fullPath)
+        # relativize this path
+        path = os.path.relpath(path, '/')
+        return os.path.join(self.assetstore['root'], path)
+
     """
     This assetstore type stores files on the filesystem underneath a root
     directory.
@@ -41,17 +54,7 @@ class WTAssetstoreAdapter(DirectFSAssetstoreAdapter):
         hash = hash_state.restoreHex(
             upload['sha512state'], 'sha512').hexdigest()
 
-        if upload['parentType'] == 'folder':
-            parent = Folder().load(id=upload['parentId'], force=True)
-        else:
-            parent = Item().load(id=upload['parentId'], force=True)
-        fullPath = path_lib.getResourcePath(upload['parentType'], parent,
-                                            force=True)
-        fullPath = pathlib.Path(os.path.join(fullPath, upload['name']))
-        path = self.pathMapper.girderToPhysical(fullPath)
-        # relativize this path
-        path = os.path.relpath(path, '/')
-        abspath = os.path.join(self.assetstore['root'], path)
+        abspath = self._getAbsPath(upload['parentId'], upload['parentType'], upload['name'])
         absdir = os.path.dirname(abspath)
 
         # Store the hash in the upload so that deleting a file won't delete
