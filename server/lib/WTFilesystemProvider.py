@@ -1,5 +1,6 @@
 import os
 import stat
+import pathlib
 
 import datetime
 from wsgidav.fs_dav_provider import \
@@ -17,6 +18,7 @@ from .WTAssetstoreTypes import WTAssetstoreTypes
 
 
 PROP_EXECUTABLE = '{http://apache.org/dav/props/}executable'
+WT_HOME_FLAG = '__WT_HOME__'
 
 
 # A mixin to deal with the executable property for WT*Resource
@@ -63,6 +65,71 @@ class _WTDAVResource:
     def getUser(self):
         return self.environ['WT_DAV_USER_DICT']
 
+    def _girderLookup(self, path):
+        r = path_util.lookUpPath(path, filter=False, force=True)
+        doc = r['document']
+        doc['_modelType'] = r['model']
+        return doc
+
+    def _girderMkdir(self, parentDoc, name):
+        # avoid recursive dav -> girder -> dav folder creation by passing a flag
+        # in the description to prevent the event handler from creating the same folder
+        Folder().createFolder(
+            parent=parentDoc, name=name, description=WT_HOME_FLAG,
+            parentType=parentDoc['_modelType'], creator=self.getUser())
+
+    def _girderMkdirs(self, girderPath: pathlib.Path, origPath: pathlib.Path):
+        if len(girderPath.parts) == 1:
+            raise Exception('Cannot create folder %s' % origPath.as_posix())
+        # there are more efficient ways to do this, but they are not necessarily more portable
+        try:
+            return self._girderLookup(girderPath.as_posix())
+        except ResourcePathNotFound:
+            parentDoc = self._girderMkdirs(girderPath.parent, origPath)
+            self._girderMkdir(parentDoc, girderPath.name)
+
+    def _girderMoveOrRename(self, dest):
+        selfPath = pathlib.PurePosixPath(self.path)
+        destPath = pathlib.PurePosixPath(dest)
+
+        if selfPath.parent == destPath.parent or len(destPath.parts) == 1:
+            self._girderRename(destPath.name)
+        else:
+            self._girderMove(dest)
+
+    def _girderRename(self, newName: str):
+        doc = self._girderLookup(self._refToGirderPath())
+        doc['name'] = newName
+        doc['description'] = WT_HOME_FLAG
+        self._girderUpdateModel(doc)
+
+    def _girderUpdateModel(self, doc):
+        raise NotImplementedError()
+
+    def _girderCopy(self, destPath):
+        doc = self._girderLookup(self._refToGirderPath())
+        # the assumption in FolderResource.copyMoveSingle seems to be that the parent
+        # of destPath must exist
+        destGirderParentPath = self.pathMapper.davToGirder(os.path.dirname(destPath))
+        girderDestDoc = self._girderLookup(destGirderParentPath)
+        self._girderModelCopy(doc, girderDestDoc, destPath)
+
+    def _girderModelCopy(self, doc, destDoc, destPath):
+        raise NotImplementedError()
+
+    def _girderMove(self, destPath: str):
+        doc = self._girderLookup(self._refToGirderPath())
+        # FolderResource.moveRecursive asserts that destPath does not exist
+        destGirderParentPath = self.pathMapper.davToGirder(os.path.dirname(destPath))
+        dest = pathlib.Path(destGirderParentPath)
+        self._girderMkdirs(dest, dest)
+        girderDestDoc = self._girderLookup(destGirderParentPath)
+        doc['description'] = WT_HOME_FLAG
+        self._girderModelMove(doc, girderDestDoc)
+
+    def _girderModelMove(self, doc, destDoc):
+        raise NotImplementedError()
+
 
 class WTFolderResource(_WTDAVResource, FolderResource):
     def __init__(self, path, environ, fp, pathMapper):
@@ -86,32 +153,26 @@ class WTFolderResource(_WTDAVResource, FolderResource):
 
     def createCollection(self, name):
         logger.debug('%s -> createCollection(%s)' % (self.getRefUrl(), name))
+        FolderResource.createCollection(self, name)
         try:
-            folder = path_util.lookUpPath(self._refToGirderPath(), force=True)
-            # avoid recursive dav -> girder -> dav folder creation by passing a flag
-            # in the description to prevent the event handler from creating the same folder
-            Folder().createFolder(
-                parent=folder['document'], name=name, description='__WT_HOME__',
-                parentType='folder', creator=self.getUser())
+            folderDoc = self._girderLookup(self._refToGirderPath())
+            self._girderMkdir(folderDoc, name)
         except ResourcePathNotFound:
             pass  # TODO: do something about it?
-        FolderResource.createCollection(self, name)
 
     def createEmptyResource(self, name):
         logger.debug('%s -> createEmptyResource(%s)' % (self.getRefUrl(), name))
         try:
-            folder = path_util.lookUpPath(self._refToGirderPath(), force=True)
-            Item().createItem(
-                folder=folder['document'], name=name,
-                creator=self.getUser())
+            folderDoc = self._girderLookup(self._refToGirderPath())
+            Item().createItem(folder=folderDoc, name=name, creator=self.getUser())
         except ResourcePathNotFound:
             pass  # TODO: do something about it?
         return FolderResource.createEmptyResource(self, name)
 
     def delete(self):
         try:
-            folder = path_util.lookUpPath(self._refToGirderPath(), force=True)
-            Folder().remove(folder['document'])
+            folderDoc = self._girderLookup(self._refToGirderPath())
+            Folder().remove(folderDoc)
         except ResourcePathNotFound:
             # delete folder if it exists, since we won't get a notification from Girder in
             # this case
@@ -123,6 +184,31 @@ class WTFolderResource(_WTDAVResource, FolderResource):
     # girder bypass
     def _delete(self):
         FolderResource.delete(self)
+
+    def copyMoveSingle(self, destPath, isMove):
+        FolderResource.copyMoveSingle(self, destPath, isMove)
+        # looking at the FolderResource.copyMoveSingle implementation, it looks like
+        # this isn't actually implementing a move. The isMove parameter is only used
+        # to figure out whether to copy or move the properties. Until such time that
+        # we understand why any FS operation would map to a move of the properties
+        # without deleting the source, we'll stick to copying the properties
+        self._girderCopy(destPath)
+
+    def moveRecursive(self, destPath):
+        FolderResource.moveRecursive(self, destPath)
+        self._girderMoveOrRename(destPath)
+
+    def _girderUpdateModel(self, doc):
+        Folder().updateFolder(doc)
+
+    def _girderModelCopy(self, srcDoc, destDoc, destPath):
+        Folder().copyFolder(srcFolder=srcDoc, parent=destDoc,
+                            name=os.path.basename(destPath), description=WT_HOME_FLAG,
+                            parentType=destDoc['_modelType'],
+                            public=srcDoc['public'], creator=self.getUser())
+
+    def _girderModelMove(self, doc, destDoc):
+        Folder().move(doc, parent=destDoc, parentType=destDoc['_modelType'])
 
 
 class WTFileResource(_WTDAVResource, FileResource):
@@ -146,8 +232,7 @@ class WTFileResource(_WTDAVResource, FileResource):
     def endWrite(self, withErrors):
         FileResource.endWrite(self, withErrors)
         try:
-            item = path_util.lookUpPath(self._refToGirderPath(), force=True)
-            item = item.pop('document')
+            itemDoc = self._girderLookup(self._refToGirderPath())
 
             FSProvider = self.environ['wsgidav.provider']
             # WTFileResource already has file stat object but it's stale,
@@ -155,15 +240,40 @@ class WTFileResource(_WTDAVResource, FileResource):
             stat = os.stat(self._filePath)
 
             file = File().createFile(
-                name=self.name, creator=self.getUser(), item=item, reuseExisting=True,
-                size=stat.st_size, assetstore=FSProvider.assetstore,
-                saveFile=False)
+                name=self.name, creator=self.getUser(), item=itemDoc, reuseExisting=True,
+                size=stat.st_size, assetstore=FSProvider.assetstore, saveFile=False)
             file['path'] = self._filePath
             file['mtime'] = stat.st_mtime
+            file['description'] = WT_HOME_FLAG
             # file['imported'] = True
             File().save(file)
         except ResourcePathNotFound:
             pass  # TODO: do something about it?
+
+    def copyMoveSingle(self, destPath, isMove):
+        FileResource.copyMoveSingle(self, destPath, isMove)
+        self._girderCopy(destPath)
+
+    def _girderCopyFolder(self, destPath):
+        itemDoc = self._girderLookup(self._refToGirderPath())
+        destGirderParentPath = self.pathMapper.davToGirder(os.path.dirname(destPath))
+        girderDestDoc = path_util.lookUpPath(destGirderParentPath, force=True)
+        Item().copyItem(srcItem=itemDoc, creator=self.getUser(), name=os.path.basename(destPath),
+                        folder=girderDestDoc, description=WT_HOME_FLAG)
+
+    def moveRecursive(self, destPath):
+        FileResource.moveRecursive(self, destPath)
+        self._girderMoveOrRename(destPath)
+
+    def _girderUpdateModel(self, doc):
+        Item().updateItem(doc)
+
+    def _girderModelCopy(self, srcDoc, destDoc, destPath):
+        Item().copyItem(srcItem=srcDoc, creator=self.getUser(), parent=destDoc,
+                        name=os.path.basename(destPath), description=WT_HOME_FLAG)
+
+    def _girderModelMove(self, doc, destDoc):
+        Item().move(doc, destDoc)
 
 
 # Adds support for 'executable' property
@@ -219,4 +329,5 @@ class WTFilesystemProvider(FilesystemProvider):
         return WTFileResource(path, environ, fp, self.pathMapper)
 
     def _locToFilePath(self, path, environ=None):
-        return FilesystemProvider._locToFilePath(self, self.pathMapper.davToPhysical(path), environ)
+        return FilesystemProvider._locToFilePath(self, self.pathMapper.davToPhysical(path),
+                                                 environ)

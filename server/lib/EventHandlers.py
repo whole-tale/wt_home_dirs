@@ -6,7 +6,7 @@ from girder.events import Event
 from girder.utility import path as path_util
 from girder.models.folder import Folder
 from girder.models.item import Item
-from . WTFilesystemProvider import WTFilesystemProvider
+from . WTFilesystemProvider import WTFilesystemProvider, WT_HOME_FLAG
 
 
 class EventHandler:
@@ -91,8 +91,10 @@ class FolderSaveHandler(EventHandler):
 
     def run(self, event: Event, path: pathlib.Path, pathMapper, provider: WTFilesystemProvider):
         folder = self.getResource(event)
-        if folder['description'] == '__WT_HOME__':
+        if folder['description'] == WT_HOME_FLAG:
             folder['description'] = ''
+            return
+        if pathMapper.isGirderRoot(path):
             return
         if '_id' not in folder:
             self.createFolder(path, pathMapper, provider)
@@ -145,6 +147,9 @@ class ItemSaveHandler(EventHandler):
 
     def run(self, event: Event, path: pathlib.Path, pathMapper, provider: WTFilesystemProvider):
         item = self.getResource(event)
+        if item['description'] == WT_HOME_FLAG:
+            item['description'] = ''
+            return
         if '_id' in item:
             storedItem = Item().load(item['_id'], force=True)
             if storedItem['folderId'] != item['folderId']:
