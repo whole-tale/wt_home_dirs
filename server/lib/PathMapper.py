@@ -34,6 +34,8 @@ class PathMapper:
 
     def getRealm(self):
         raise Exception('Not implemented')
+    def isGirderRoot(self, path: pathlib.Path):
+        raise NotImplementedError()
 
 
 class HomePathMapper(PathMapper):
@@ -59,6 +61,10 @@ class HomePathMapper(PathMapper):
 
     def getRealm(self):
         return 'homes'
+
+    def isGirderRoot(self, path: pathlib.Path):
+        # assume it already matches
+        return len(path.parts) == 4
 
 
 class TalePathMapper(PathMapper):
@@ -86,3 +92,6 @@ class TalePathMapper(PathMapper):
 
     def getRealm(self):
         return 'tales'
+
+    def isGirderRoot(self, path: pathlib.Path):
+        return len(path.parts) == 4
