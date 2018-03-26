@@ -3,6 +3,7 @@ from girder.models.model_base import AccessException
 import datetime
 import time
 
+
 class CacheEntry:
     def __init__(self, value):
         self.value = value
