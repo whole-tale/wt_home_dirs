@@ -77,7 +77,7 @@ class _WTDAVResource:
         folder = Folder().createFolder(
             parent=parentDoc, name=name, description=WT_HOME_FLAG,
             parentType=parentDoc['_modelType'], creator=self.getUser())
-        logger.info('%s -> _girderMkdir(%s): %s' % (self.getRefUrl(), name, folder))
+        print('%s -> _girderMkdir(%s): %s' % (self.getRefUrl(), name, folder))
 
     def _girderMkdirs(self, girderPath: pathlib.Path, origPath: pathlib.Path):
         if len(girderPath.parts) == 1:
