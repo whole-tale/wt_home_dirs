@@ -117,8 +117,7 @@ class FolderSaveHandler(EventHandler):
         if not isinstance(res, DAVCollection):
             raise IOError('Specified resource is not a folder on disk: %s' % path)
 
-    def moveFolder(self, src: dict, dst: dict, newName: str, pathMapper,
-                   provider: WTFilesystemProvider):
+    def moveFolder(self, src: dict, dst: dict, pathMapper, provider: WTFilesystemProvider):
         girderSrcPath = path_util.getResourcePath('folder', src, force=True)
         girderDstPath = path_util.getResourcePath('folder', dst, force=True)
 
@@ -162,8 +161,7 @@ class ItemSaveHandler(EventHandler):
         if isinstance(res, DAVCollection):
             raise IOError('Found a folder where a file was expected: %s' % path)
 
-    def moveItem(self, src: dict, dst: dict, newName: str, pathMapper,
-                 provider: WTFilesystemProvider):
+    def moveItem(self, src: dict, dst: dict, pathMapper, provider: WTFilesystemProvider):
         girderSrcPath = path_util.getResourcePath('item', src, force=True)
         girderDstPath = path_util.getResourcePath('item', dst, force=True)
 
