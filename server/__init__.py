@@ -128,6 +128,7 @@ def setDefaults():
             # methods
             assetstorePath = os.path.join(ROOT_DIR, 'tests', 'assetstore')
             # make sure we start with a clean slate
+            os.makedirs(assetstorePath)
             assetstorePath = tempfile.mkdtemp(prefix=name, dir=assetstorePath)
             SettingDefault.defaults[key] = assetstorePath
         else:
