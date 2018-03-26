@@ -1,4 +1,5 @@
 import pathlib
+from typing import Union
 from girder.plugins.wholetale.constants import WORKSPACE_NAME
 
 
@@ -6,14 +7,17 @@ class PathMapper:
     def __init__(self):
         pass
 
-    def girderToDav(self, path: pathlib.Path):
-        raise Exception('Not implemented')
+    def girderToDav(self, path: Union[pathlib.PurePosixPath, str]) -> pathlib.PurePosixPath:
+        raise NotImplementedError()
+
+    def girderToDavStr(self, path: Union[pathlib.PurePosixPath, str]) -> str:
+        return self.girderToDav(path).as_posix()
 
     def davToGirder(self, path: str):
-        raise Exception('Not implemented')
+        raise NotImplementedError()
 
-    def davToPhysical(self, path: str):
-        raise Exception('Not implemented')
+    def davToPhysical(self, path: Union[pathlib.PurePosixPath, str]) -> str:
+        raise NotImplementedError()
 
     def girderToPhysical(self, path: pathlib.Path):
         return self.davToPhysical(self.girderToDav(path))
@@ -36,13 +40,22 @@ class PathMapper:
             return pathlib.PurePosixPath(prefix, *s.parts)
 
     def getSubdir(self, environ: dict):
-        raise Exception('Not implemented')
+        raise NotImplementedError()
 
     def girderPathMatches(self, path: pathlib.Path):
-        raise Exception('Not implemented')
+        raise NotImplementedError()
 
     def getRealm(self):
-        raise Exception('Not implemented')
+        raise NotImplementedError()
+
+    def _toPosixPurePath(self, path: Union[pathlib.Path, str]):
+        if isinstance(path, str):
+            return pathlib.PurePosixPath(path)
+        elif isinstance(path, pathlib.PurePosixPath):
+            return path
+        else:
+            raise Exception('Can''t convert %s to path' % path)
+
     def isGirderRoot(self, path: pathlib.Path):
         raise NotImplementedError()
 
@@ -51,19 +64,21 @@ class HomePathMapper(PathMapper):
     def __init__(self):
         PathMapper.__init__(self)
 
-    def girderToDav(self, path: pathlib.Path):
+    def girderToDav(self, path: Union[pathlib.PurePosixPath, str]) -> pathlib.PurePosixPath:
+        path = self._toPosixPurePath(path)
         # /user/<username>/Home/<path> -> /<username>/<path>
-        return '/%s/%s' % (path.parts[2], '/'.join(path.parts[4:]))
+        return pathlib.PurePosixPath('/', path.parts[2], *path.parts[4:])
 
     def davToGirder(self, spath: str):
         path = pathlib.Path(spath)
         return '/user/%s/Home/%s' % (path.parts[1], '/'.join(path.parts[2:]).rstrip('/'))
 
-    def davToPhysical(self, path: str):
-        return self.addPrefix(path, 1)
+    def davToPhysical(self, path: Union[pathlib.PurePosixPath, str]) -> str:
+        path = self._toPosixPurePath(path)
+        return self.addPrefix(path, 1).as_posix()
 
-    def getSubdir(self, environ: dict):
-        return self.addPrefix(environ['WT_DAV_AUTHORIZED_USER'], 1)
+    def getSubdir(self, environ: dict) -> pathlib.PurePosixPath:
+        return self.addPrefix(pathlib.PurePosixPath(environ['WT_DAV_AUTHORIZED_USER']), 1)
 
     def girderPathMatches(self, path: pathlib.Path):
         return len(path.parts) >= 4 and path.parts[1] == 'user' and path.parts[3] == 'Home'
@@ -80,20 +95,22 @@ class TalePathMapper(PathMapper):
     def __init__(self):
         PathMapper.__init__(self)
 
-    def girderToDav(self, path: pathlib.Path):
+    def girderToDav(self, path: Union[pathlib.PurePosixPath, str]) -> pathlib.PurePosixPath:
+        path = self._toPosixPurePath(path)
         # /tale/<taleName>/<WORKSPACE_NAME>/... -> /...
-        return '/%s/%s' % (path.parts[2], '/'.join(path.parts[4:]))
+        return pathlib.PurePosixPath('/', path.parts[2], *path.parts[4:])
 
     def davToGirder(self, spath: str):
         path = pathlib.Path(spath)
         return '/tale/%s/%s/%s' % \
                (path.parts[1], WORKSPACE_NAME, '/'.join(path.parts[2:]).rstrip('/'))
 
-    def davToPhysical(self, path: str):
-        return self.addPrefix(path, 2)
+    def davToPhysical(self, path: Union[pathlib.PurePosixPath, str]) -> str:
+        path = self._toPosixPurePath(path)
+        return self.addPrefix(path, 2).as_posix()
 
-    def getSubdir(self, environ: dict):
-        return self.addPrefix(environ['WT_DAV_TALE'], 2)
+    def getSubdir(self, environ: dict) -> pathlib.PurePosixPath:
+        return self.addPrefix(pathlib.PurePosixPath(environ['WT_DAV_TALE']), 2)
 
     def girderPathMatches(self, path: pathlib.Path):
         # we may want to allow removal of the whole thing, and, maybe also in the case of users
