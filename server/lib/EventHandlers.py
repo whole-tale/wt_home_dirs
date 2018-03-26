@@ -27,11 +27,11 @@ class EventHandler:
                             provider: WTFilesystemProvider):
         if isinstance(girderPath, str):
             girderPath = pathlib.Path(girderPath)
-        return provider.getResourceInst(pathMapper.girderToDav(girderPath),
+        return provider.getResourceInst(pathMapper.girderToDavStr(girderPath),
                                         {'wsgidav.provider': provider})
 
     def getPhysicalPath(self, girderPath, pathMapper, provider) -> str:
-        return provider._locToFilePath(pathMapper.girderToDav(girderPath),
+        return provider._locToFilePath(pathMapper.girderToDavStr(girderPath),
                                        {'wsgidav.provider': provider})
 
     def run(self, event: Event, path: pathlib.Path, pathMapper, provider: WTFilesystemProvider):
@@ -126,14 +126,15 @@ class FolderSaveHandler(EventHandler):
 
         res = self.getResourceInstance(girderSrcPath, pathMapper, provider)
         self.assertIsValidFolder(res, girderSrcPath)
-        res.moveRecursive(davDstPath)
+
+        res.moveRecursive(davDstPath.as_posix())
 
     def renameFolder(self, src: dict, newName: str, pathMapper, provider: WTFilesystemProvider):
         girderSrcPath = path_util.getResourcePath('folder', src, force=True)
         res = self.getResourceInstance(girderSrcPath, pathMapper, provider)
         self.assertIsValidFolder(res, girderSrcPath)
         davPath = pathMapper.girderToDav(girderSrcPath)
-        res.moveRecursive(davPath.parent.joinpath(newName))
+        res.moveRecursive(davPath.parent.joinpath(newName).as_posix())
 
 
 class ItemSaveHandler(EventHandler):
@@ -170,14 +171,15 @@ class ItemSaveHandler(EventHandler):
 
         res = self.getResourceInstance(girderSrcPath, pathMapper, provider)
         self.assertIsValidFile(res, girderSrcPath)
-        res.moveRecursive(davDstPath)
+
+        res.moveRecursive(davDstPath.as_posix())
 
     def renameItem(self, src: dict, newName: str, pathMapper, provider: WTFilesystemProvider):
         girderSrcPath = path_util.getResourcePath('item', src, force=True)
         res = self.getResourceInstance(girderSrcPath, pathMapper, provider)
         davPath = pathMapper.girderToDav(girderSrcPath)
         self.assertIsValidFile(res, girderSrcPath)
-        res.moveRecursive(davPath.parent.joinpath(newName))
+        res.moveRecursive(davPath.parent.joinpath(newName).as_posix())
 
 
 class AssetstoreQueryHandler(EventHandler):
