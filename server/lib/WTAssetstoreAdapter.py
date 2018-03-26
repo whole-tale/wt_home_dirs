@@ -87,9 +87,16 @@ class WTAssetstoreAdapter(DirectFSAssetstoreAdapter):
                 pass
 
         file['sha512'] = hash
-        file['path'] = path
 
         return file
+
+    def deleteFile(self, file):
+        # can't rely on 'path' since it's not updated properly on rename/move/copy.
+        abspath = self._getAbsPath(file['itemId'], 'item', None)
+        os.remove(abspath)
+
+    def fullPath(self, file):
+        return self._getAbsPath(file['itemId'], 'item', None)
 
 
 class WTHomeAssetstoreAdapter(WTAssetstoreAdapter):
