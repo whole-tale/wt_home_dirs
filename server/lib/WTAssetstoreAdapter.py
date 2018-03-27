@@ -12,7 +12,7 @@ from girder.models.folder import Folder
 from girder.utility import mkdir
 from girder.utility import path as path_lib
 from girder.utility import hash_state
-from girder.utility.directfs_assetstore_adapter import DirectFSAssetstoreAdapter
+from girder.utility.filesystem_assetstore_adapter import FilesystemAssetstoreAdapter
 from .PathMapper import PathMapper, HomePathMapper, TalePathMapper
 
 
@@ -20,9 +20,9 @@ from .PathMapper import PathMapper, HomePathMapper, TalePathMapper
 DEFAULT_PERMS = stat.S_IRUSR | stat.S_IWUSR
 
 
-class WTAssetstoreAdapter(DirectFSAssetstoreAdapter):
+class WTAssetstoreAdapter(FilesystemAssetstoreAdapter):
     def __init__(self, assetstore, pathMapper: PathMapper):
-        DirectFSAssetstoreAdapter.__init__(self, assetstore)
+        FilesystemAssetstoreAdapter.__init__(self, assetstore)
         self.pathMapper = pathMapper
 
     def _getAbsPath(self, parentId, parentType, name):
