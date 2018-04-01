@@ -221,7 +221,7 @@ class WTFileResource(_WTDAVResource, FileResource):
 
     def delete(self):
         try:
-            item = path_util.lookUpPath(self._refToGirderPath(), force=True)
+            item = self._girderLookup(self._refToGirderPath())
             Item().remove(item['document'])
         except ResourcePathNotFound:
             pass  # TODO: do something about it?
@@ -260,7 +260,7 @@ class WTFileResource(_WTDAVResource, FileResource):
     def _girderCopyFolder(self, destPath):
         itemDoc = self._girderLookup(self._refToGirderPath())
         destGirderParentPath = self.pathMapper.davToGirder(os.path.dirname(destPath))
-        girderDestDoc = path_util.lookUpPath(destGirderParentPath, force=True)
+        girderDestDoc = self._girderLookup(destGirderParentPath)
         Item().copyItem(srcItem=itemDoc, creator=self.getUser(), name=os.path.basename(destPath),
                         folder=girderDestDoc, description=WT_HOME_FLAG)
 
