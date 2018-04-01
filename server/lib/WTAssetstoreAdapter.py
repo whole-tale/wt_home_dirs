@@ -66,25 +66,14 @@ class WTAssetstoreAdapter(FilesystemAssetstoreAdapter):
 
         mkdir(absdir)
 
-        # Only maintain the lock which checking if the file exists.  The only
-        # other place the lock is used is checking if an upload task has
-        # reserved the file, so this is sufficient.
-        with filelock.FileLock(abspath + '.deleteLock'):
-            pathExists = os.path.exists(abspath)
-        if pathExists:
-            # Already have this file stored, just delete temp file.
-
-            # Yeah, maybe. Then maybe not.
-            os.unlink(upload['tempFile'])
-        else:
-            # Move the temp file to permanent location in the assetstore.
-            # shutil.move works across filesystems
-            shutil.move(upload['tempFile'], abspath)
-            try:
-                os.chmod(abspath, self.assetstore.get('perms', DEFAULT_PERMS))
-            except OSError:
-                # some filesystems may not support POSIX permissions
-                pass
+        # Move the temp file to permanent location in the assetstore.
+        # shutil.move works across filesystems
+        shutil.move(upload['tempFile'], abspath)
+        try:
+            os.chmod(abspath, self.assetstore.get('perms', DEFAULT_PERMS))
+        except OSError:
+            # some filesystems may not support POSIX permissions
+            pass
 
         file['sha512'] = hash
 
