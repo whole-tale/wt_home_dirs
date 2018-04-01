@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
+import time
 from tests import base
 from girder import config
 from girder.models.token import Token
@@ -592,13 +593,14 @@ class IntegrationTestCase(base.TestCase):
         self.rm(adapter, dir3 + '/' + file2)
         self.rmdir(adapter, dir3)
 
-    def test08HomeDir(self):
+    def test13HomeDir(self):
         resp = self.request(
             path='/resource/lookup', method='GET', user=self.user,
             params={'path': '/user/{login}/Home/ala'.format(**self.user)})
         url = 'http://127.0.0.1:%s' % os.environ['GIRDER_PORT']
         root = '/homes/{login}'.format(**self.user)
         password = 'token:{_id}'.format(**self.token)
+        time.sleep(1)
         with WebDAVFS(url, login=self.user['login'], password=password,
                       root=root) as handle:
             self.assertEqual(handle.listdir('.'), [])
