@@ -222,7 +222,7 @@ class WTFileResource(_WTDAVResource, FileResource):
     def delete(self):
         try:
             item = self._girderLookup(self._refToGirderPath())
-            Item().remove(item['document'])
+            Item().remove(item)
         except ResourcePathNotFound:
             pass  # TODO: do something about it?
 
