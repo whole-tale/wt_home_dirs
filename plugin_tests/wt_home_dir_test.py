@@ -217,8 +217,8 @@ class GirderAdapter(Adapter):
 
     def getFolder(self, path):
         # Is the trailing slash an unreasonable assumption? Works in most other places
-        path = path.rstrip('/')
-        resp = self.getResource('%s/%s' % (self.rootDir, path))
+        path = ('%s/%s' % (self.rootDir, path)).rstrip('/')
+        resp = self.getResource(path)
         if not resp.json['_modelType'] == 'folder':
             raise Exception('Not a folder: %s' % path)
         return resp
