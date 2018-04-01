@@ -77,11 +77,9 @@ class _WTDAVResource:
     def _girderMkdir(self, parentDoc, name):
         # avoid recursive dav -> girder -> dav folder creation by passing a flag
         # in the description to prevent the event handler from creating the same folder
-        print('%s -> _girderMkdir(%s)' % (self.getRefUrl(), name))
         folder = Folder().createFolder(
             parent=parentDoc, name=name, description=WT_HOME_FLAG,
             parentType=parentDoc['_modelType'], creator=self.getUser())
-        print('%s -> _girderMkdir(%s): %s' % (self.getRefUrl(), name, folder))
 
     def _girderMkdirs(self, girderPath: pathlib.Path, origPath: pathlib.Path):
         if len(girderPath.parts) == 1:
@@ -166,7 +164,7 @@ class WTFolderResource(_WTDAVResource, FolderResource):
             pass  # TODO: do something about it?
 
     def createEmptyResource(self, name):
-        logger.info('%s -> createEmptyResource(%s)' % (self.getRefUrl(), name))
+        logger.debug('%s -> createEmptyResource(%s)' % (self.getRefUrl(), name))
         try:
             folderDoc = self._girderLookup(self._refToGirderPath())
             Item().createItem(folder=folderDoc, name=name, creator=self.getUser())
