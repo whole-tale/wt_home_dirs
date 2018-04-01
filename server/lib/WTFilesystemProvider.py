@@ -66,6 +66,9 @@ class _WTDAVResource:
         return self.environ['WT_DAV_USER_DICT']
 
     def _girderLookup(self, path):
+        # ensure that the path does not end in a slash since lookUpPath fails if that's the
+        # case.
+        path = path.rstrip('/')
         r = path_util.lookUpPath(path, filter=False, force=True)
         doc = r['document']
         doc['_modelType'] = r['model']
