@@ -77,7 +77,7 @@ class _WTDAVResource:
     def _girderMkdir(self, parentDoc, name):
         # avoid recursive dav -> girder -> dav folder creation by passing a flag
         # in the description to prevent the event handler from creating the same folder
-        folder = Folder().createFolder(
+        Folder().createFolder(
             parent=parentDoc, name=name, description=WT_HOME_FLAG,
             parentType=parentDoc['_modelType'], creator=self.getUser())
 
