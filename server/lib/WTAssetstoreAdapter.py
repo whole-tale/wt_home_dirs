@@ -2,7 +2,6 @@
 
 import os
 import pathlib
-import filelock
 import stat
 import shutil
 
