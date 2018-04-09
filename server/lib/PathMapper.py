@@ -25,7 +25,7 @@ class PathMapper:
     def addPrefix(self, s: pathlib.PurePosixPath, n) -> pathlib.PurePosixPath:
         if s.is_absolute():
             if len(s.parts) == 1:
-                raise Exception('Invalid argument')
+                raise Exception('Invalid path: %s' % s)
             prefix = s.parts[1]
         else:
             prefix = s.parts[0]
@@ -97,27 +97,28 @@ class TalePathMapper(PathMapper):
 
     def girderToDav(self, path: Union[pathlib.PurePosixPath, str]) -> pathlib.PurePosixPath:
         path = self._toPosixPurePath(path)
-        # /tale/<taleName>/<WORKSPACE_NAME>/... -> /...
-        return pathlib.PurePosixPath('/', path.parts[2], *path.parts[4:])
+        # /collection/<WORKSPACE_NAME>/<WORKSPACE_NAME>/<taleId>/... -> /<taleId>/...
+        return pathlib.PurePosixPath('/', *path.parts[4:])
 
     def davToGirder(self, spath: str):
         path = pathlib.Path(spath)
-        return '/tale/%s/%s/%s' % \
-               (path.parts[1], WORKSPACE_NAME, '/'.join(path.parts[2:]).rstrip('/'))
+        return '/collection/%s/%s/%s' % \
+               (WORKSPACE_NAME, WORKSPACE_NAME, '/'.join(path.parts[1:]).rstrip('/'))
 
     def davToPhysical(self, path: Union[pathlib.PurePosixPath, str]) -> str:
         path = self._toPosixPurePath(path)
-        return self.addPrefix(path, 2).as_posix()
+        return self.addPrefix(path, 1).as_posix()
 
     def getSubdir(self, environ: dict) -> pathlib.PurePosixPath:
-        return self.addPrefix(pathlib.PurePosixPath(environ['WT_DAV_TALE']), 2)
+        return self.addPrefix(pathlib.PurePosixPath(environ['WT_DAV_TALE_ID']), 1)
 
     def girderPathMatches(self, path: pathlib.Path):
         # we may want to allow removal of the whole thing, and, maybe also in the case of users
-        return len(path.parts) >= 4 and path.parts[1] == 'tale' and path.parts[3] == WORKSPACE_NAME
+        return len(path.parts) >= 5 and path.parts[1] == 'collection' and \
+            path.parts[3] == WORKSPACE_NAME and path.parts[2] == WORKSPACE_NAME
 
     def getRealm(self):
         return 'tales'
 
     def isGirderRoot(self, path: pathlib.Path):
-        return len(path.parts) == 4
+        return len(path.parts) == 5

@@ -1,8 +1,12 @@
 from wsgidav.middleware import BaseMiddleware
 from wsgidav import compat, util
+from girder.utility.model_importer import ModelImporter
+from girder.constants import AccessType
 import pathlib
 
 _logger = util.getModuleLogger(__name__, True)
+
+DAV_READ_OPS = set(['HEAD', 'GET', 'PROPFIND'])
 
 
 class Authorizer(BaseMiddleware):
@@ -70,22 +74,38 @@ class HomeAuthorizer(Authorizer):
 class TaleAuthorizer(Authorizer):
     def __init__(self, application, config):
         Authorizer.__init__(self, application, config)
+        self.taleModel = ModelImporter.model('tale', 'wholetale')
 
     def _checkAccess(self, userName, spath: str, environ, start_response):
-        # allow /<tale> and /<tale>/* if user has access to tale
-        # should restrict to RO access
+        # allow access to /<tale> and /<tale>/* if:
+        #   it's a write op and user has admin access on tale
+        #   it's a read op and user has read access on tale
+        # otherwise, deny access
+
         path = pathlib.Path(spath)
-        taleId = self.getTaleId(path)
 
         if len(path.parts) < 2:
             body = self.buildNotAuthorizedResponseBody(userName, path)
             return self.sendNotAuthorizedResponse(body, environ, start_response)
 
-        if path == ('/%s' % userName) or path.startswith('/%s/' % userName):
-            return self.application(environ, start_response)
+        taleId = self.getTaleId(path)
+        user = environ['WT_DAV_USER_DICT']
+
+        if self.isReadOp(environ):
+            tale = self.taleModel.load(taleId, user=user, level=AccessType.READ)
         else:
+            tale = self.taleModel.load(taleId, user=user, level=AccessType.ADMIN)
+
+        if tale is None:
             body = self.buildNotAuthorizedResponseBody(userName, path)
             return self.sendNotAuthorizedResponse(body, environ, start_response)
+        else:
+            environ['WT_DAV_TALE_DICT'] = tale
+            environ['WT_DAV_TALE_ID'] = taleId
+            return self.application(environ, start_response)
 
     def getTaleId(self, path: pathlib.Path):
-        taleName = path.parts[1]
+        return path.parts[1]
+
+    def isReadOp(self, environ):
+        return environ['REQUEST_METHOD'] in DAV_READ_OPS

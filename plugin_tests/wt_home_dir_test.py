@@ -2,9 +2,11 @@
 # -*- coding: utf-8 -*-
 import os
 import time
+from bson.objectid import ObjectId
 from tests import base
 from girder import config
 from girder.models.token import Token
+from girder.utility.model_importer import ModelImporter
 from webdavfs.webdavfs import WebDAVFS
 
 os.environ['GIRDER_PORT'] = os.environ.get('GIRDER_PORT', '30001')
@@ -74,10 +76,10 @@ class Adapter:
 
 
 class FSAdapter(Adapter):
-    def __init__(self, realm, pathMapper, app, user: dict):
+    def __init__(self, realm, pathMapper, app, user: dict, rootDir: str):
         Adapter.__init__(self, realm, pathMapper, app, user)
         provider = app.providerMap['/']['provider']
-        self.root = provider.rootFolderPath + '/' + pathMapper.davToPhysical(self.userName)
+        self.root = provider.rootFolderPath + '/' + pathMapper.davToPhysical(rootDir)
         self.name = 'FS'
 
     def mkdir(self, path):
@@ -336,6 +338,8 @@ class IntegrationTestCase(base.TestCase):
         base.TestCase.setUp(self)
         from girder.plugins.wt_home_dir import HOME_DIRS_APPS
         self.homeDirsApps = HOME_DIRS_APPS  # nopep8
+        from girder.plugins.wholetale.constants import WORKSPACE_NAME
+        global WORKSPACE_NAME
         # We need to recreate DirectFS assetstore, which was dropped in
         # base.TestCase.setUp...
 
@@ -363,7 +367,24 @@ class IntegrationTestCase(base.TestCase):
         self.admin, self.user = [self.model('user').createUser(**user)
                                  for user in users]
         self.token = Token().createToken(self.user)
+
+        self.privateTale = self.createTale(self.user, public=False)
+        # TODO: add tests checking that other users only have read access to public tales
+        self.publicTale = self.createTale(self.admin, public=True)
         self.clearDAVAuthCache()
+
+    def createTale(self, user, public):
+        # fake a recipe because the model downloads actual stuff
+        recipe = {'_id': ObjectId()}
+        imageModel = ModelImporter.model('image', 'wholetale')
+        image = imageModel.createImage(recipe, 'test image', creator=user, public=public)
+        folderModel = ModelImporter.model('folder')
+        dataFolder = folderModel.createFolder(user, name='Tale Folder', creator=user,
+                                              parentType='user', public=public)
+        taleModel = ModelImporter.model('tale', 'wholetale')
+        tale = taleModel.createTale(image, dataFolder, creator=user, public=public)
+
+        return tale
 
     def clearDAVAuthCache(self):
         # need to do this because the DB is wiped on every test, but the dav domain
@@ -382,35 +403,39 @@ class IntegrationTestCase(base.TestCase):
         print('Running %s' % fn.__name__)
         for e in self.homeDirsApps.entries():
             if e.realm == 'tales':
-                print('Skipping tales realm since we don''t quite know how it works yet')
-                return
-            self.makeAdapters(e.realm, e.pathMapper, e.app, self.user)
+                self.makeTaleAdapters(e.pathMapper, e.app, self.user)
+                continue
+            elif e.realm == 'homes':
+                self.makeHomeAdapters(e.pathMapper, e.app, self.user)
+            else:
+                raise Exception('Unknonw realm %s' % e.realm)
             fn()
 
     def checkRealm(self, realm):
         if realm not in ['homes', 'tales']:
             raise KeyError('Don''t know how to handle realm %s' % realm)
 
-    def getDAVRootDir(self, realm):
-        self.checkRealm(realm)
-        if realm == 'homes':
-            return self.user['login']
-        elif realm == 'tales':
-            return self.taleId
+    def makeHomeAdapters(self, pathMapper, app, user: dict):
+        userName = self.user['login']
+        davRootDir = userName
+        girderRootDir = '/user/%s/Home' % userName
+        fsRootDir = userName
 
-    def getGirderRootDir(self, realm):
-        self.checkRealm(realm)
-        if realm == 'homes':
-            return '/user/%s/Home' % self.user['login']
-        elif realm == 'tales':
-            return '/tale/%s/Workspace' % self.taleId
+        self.makeAdapters('homes', pathMapper, app, user, davRootDir, girderRootDir, fsRootDir)
 
-    def makeAdapters(self, realm, pathMapper, app, user: dict):
-        self.davAdapter = DAVAdapter(realm, pathMapper, app, user, self.token,
-                                     self.getDAVRootDir(realm))
-        self.girderAdapter = GirderAdapter(realm, pathMapper, app, user, self,
-                                           self.getGirderRootDir(realm))
-        self.fsAdapter = FSAdapter(realm, pathMapper, app, user)
+    def makeTaleAdapters(self, pathMapper, app, user: dict):
+        taleId = str(self.privateTale['_id'])
+        davRootDir = taleId
+        girderRootDir = '/collection/%s/%s/%s' % (WORKSPACE_NAME, WORKSPACE_NAME, taleId)
+        fsRootDir = taleId
+
+        self.makeAdapters('tales', pathMapper, app, user, davRootDir, girderRootDir, fsRootDir)
+
+    def makeAdapters(self, realm, pathMapper, app, user, davRootDir, girderRootDir, fsRootDir):
+        self.davAdapter = DAVAdapter(realm, pathMapper, app, user, self.token, davRootDir)
+        self.girderAdapter = GirderAdapter(realm, pathMapper, app, user, self, girderRootDir)
+        self.fsAdapter = FSAdapter(realm, pathMapper, app, user, fsRootDir)
+
         self.allAdapters = [self.davAdapter, self.girderAdapter, self.fsAdapter]
 
     # make directory with one adapter and check that it exists with all of them
