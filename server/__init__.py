@@ -61,6 +61,7 @@ HOME_DIRS_APPS = AppsList()
 
 @setting_utilities.validator({
     PluginSettings.HOME_DIRS_ROOT,
+    PluginSettings.TALE_DIRS_ROOT
 })
 def validateOtherSettings(event):
     pass
