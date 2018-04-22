@@ -304,15 +304,18 @@ class WTFilesystemProvider(FilesystemProvider):
         return assetstore['type'] in WTAssetstoreTypes.ALL
 
     def createAssetstore(self):
-        logger.info('Creating assetstore %d' % self.assetstoreType)
-        dict = {
-            'type': self.assetstoreType,
-            'created': datetime.datetime.utcnow(),
-            'name': self.pathMapper.getRealm() + ' wtassetstore',
-            'root': self.rootFolderPath,
-            'perms': None
-        }
-        return Assetstore().save(dict)
+        logger.debug('Creating or updating assetstore %d' % self.assetstoreType)
+        name = self.pathMapper.getRealm() + ' wtassetstore'
+        assetstore = Assetstore().findOne(query={'name': name})
+        if not assetstore:
+            assetstore = {
+                'type': self.assetstoreType,
+                'created': datetime.datetime.utcnow(),
+                'name': name,
+                'perms': None
+            }
+        assetstore['root'] = self.rootFolderPath
+        return Assetstore().save(assetstore)
 
     def getAssetstore(self):
         return self.assetstore
