@@ -60,7 +60,7 @@ class _WTDAVResource:
         self.filestat = os.stat(self._filePath)
 
     def _refToGirderPath(self):
-        return self.pathMapper.davToGirder(self.getRefUrl())
+        return self.pathMapper.davToGirder(self.provider.sharePath + self.getPreferredPath())
 
     def getUser(self):
         return self.environ['WT_DAV_USER_DICT']
