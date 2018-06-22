@@ -189,7 +189,7 @@ class AssetstoreQueryHandler(EventHandler):
     def getResourceType(self, event: Event):
         # it seems that the model and resource are the location where the upload happens
         # rather than the target upload item/file
-        return 'folder'
+        return event.info['model']
 
     def getResource(self, event: Event):
         return event.info['resource']
