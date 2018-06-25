@@ -7,6 +7,7 @@ from tests import base
 from girder import config
 from girder.models.token import Token
 from girder.utility.model_importer import ModelImporter
+from girder.utility import path as path_util
 from webdavfs.webdavfs import WebDAVFS
 
 os.environ['GIRDER_PORT'] = os.environ.get('GIRDER_PORT', '30001')
@@ -379,12 +380,15 @@ class IntegrationTestCase(base.TestCase):
         imageModel = ModelImporter.model('image', 'wholetale')
         image = imageModel.createImage(recipe, 'test image', creator=user, public=public)
         folderModel = ModelImporter.model('folder')
-        dataFolder = folderModel.createFolder(user, name='Tale Folder', creator=user,
-                                              parentType='user', public=public)
+        dataFolder = path_util.lookUpPath(
+            '/user/{login}/Data'.format(**user), user=user).pop('document')
+        taleFolder = folderModel.createFolder(dataFolder, name='Tale Folder', creator=user,
+                                              parentType='folder', public=public)
         taleModel = ModelImporter.model('tale', 'wholetale')
-        tale = taleModel.createTale(image, dataFolder, creator=user, public=public)
-
-        return tale
+        return taleModel.createTale(
+            image,
+            [{'type': 'folder', 'id': taleFolder['_id']}],
+            creator=user, public=public)
 
     def clearDAVAuthCache(self):
         # need to do this because the DB is wiped on every test, but the dav domain
