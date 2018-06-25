@@ -158,11 +158,15 @@ class WTAssetstoreAdapter(FilesystemAssetstoreAdapter):
             else:
                 chunk = data
             if len(chunk) >= chunkSize:
-                upload = Upload().handleChunk(upload, RequestBodyStream(six.BytesIO(chunk), len(chunk)))
+                upload = Upload().handleChunk(
+                    upload, RequestBodyStream(six.BytesIO(chunk), len(chunk))
+                )
                 chunk = None
 
         if chunk is not None:
-            upload = Upload().handleChunk(upload, RequestBodyStream(six.BytesIO(chunk), len(chunk)))
+            upload = Upload().handleChunk(
+                upload, RequestBodyStream(six.BytesIO(chunk), len(chunk))
+            )
         destFile.update(upload)
         return destFile
 
