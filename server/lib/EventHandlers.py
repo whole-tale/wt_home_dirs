@@ -2,6 +2,7 @@ import os
 import pathlib
 from typing import Union
 from wsgidav.dav_provider import DAVCollection
+from wsgidav.fs_dav_provider import FileResource
 from girder.events import Event
 from girder.utility import path as path_util
 from girder.models.folder import Folder
@@ -183,6 +184,34 @@ class ItemSaveHandler(EventHandler):
         davPath = pathMapper.girderToDav(girderSrcPath)
         self.assertIsValidFile(res, girderSrcPath)
         res.moveRecursive(davPath.parent.joinpath(newName).as_posix())
+
+
+class ItemCopyPrepareHandler(EventHandler):
+    def getResourceType(self, event: Event):
+        return 'item'
+
+    def getResource(self, event: Event):
+        return event.info[0]  # TODO: Returns only source Item, should handle both
+
+    def assertIsValidFile(self, res, path):
+        if res is None:
+            raise IOError('Specified file does not exist: %s' % path)
+        if isinstance(res, DAVCollection):
+            raise IOError('Found a folder where a file was expected: %s' % path)
+
+    def run(self, event: Event, path: pathlib.Path, pathMapper, provider: WTFilesystemProvider):
+        src, dst = event.info
+        girderSrcPath = path_util.getResourcePath('item', src, force=True)
+        girderDstPath = path_util.getResourcePath('item', dst, force=True)
+        dstInWTHome = pathMapper.girderPathMatches(pathlib.Path(girderDstPath))
+        srcInWTHome = pathMapper.girderPathMatches(pathlib.Path(girderSrcPath))
+        if not all((srcInWTHome, dstInWTHome)):
+            return
+
+        davDstPath = pathMapper.girderToDav(girderDstPath)
+        res = self.getResourceInstance(girderSrcPath, pathMapper, provider)
+        self.assertIsValidFile(res, girderSrcPath)
+        FileResource.copyMoveSingle(res, davDstPath.as_posix(), False)
 
 
 class AssetstoreQueryHandler(EventHandler):
