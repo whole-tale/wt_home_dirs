@@ -674,6 +674,8 @@ class IntegrationTestCase(base.TestCase):
             self.assertEqual(handle.listdir('.'), ['test_dir'])
             self.assertEqual(handle.listdir('test_dir'), ['test_file.txt'])
             fAbsPath = self.homesPhysicalPath(self.user['login'], 'test_dir/test_file.txt')
+            fAbsPathCopy = self.homesPhysicalPath(
+                self.user['login'], 'test_dir/test_file.txt (1)')
             self.assertTrue(os.path.isfile(fAbsPath))
 
             gabspath = '/user/{login}/Home/test_dir/test_file.txt'
@@ -702,6 +704,32 @@ class IntegrationTestCase(base.TestCase):
             self.assertStatusOk(resp)
             with open(fAbsPath, 'r') as fp:
                 self.assertEqual(self.getBody(resp), fp.read())
+
+            resp = self.request(
+                path='/resource/copy', method='POST', user=self.user,
+                params={
+                    'resources': '{"item": ["%s"]}' % item['_id'],
+                    'parentType': 'folder',
+                    'parentId': item['folderId'],
+                    'progress': False
+                }
+            )
+            self.assertStatusOk(resp)
+            self.assertTrue(os.path.isfile(fAbsPathCopy))
+
+            gabspath = '/user/{login}/Home/test_dir/test_file.txt (1)'
+            resp = self.request(
+                path='/resource/lookup', method='GET', user=self.user,
+                params={'path': gabspath.format(**self.user)})
+            self.assertStatusOk(resp)
+            self.assertEqual(resp.json['_modelType'], 'item')
+            self.assertEqual(resp.json['name'], 'test_file.txt (1)')
+            self.assertEqual(resp.json['size'], fsize)
+            resp = self.request(
+                path='/item/{_id}'.format(**resp.json), method='DELETE',
+                user=self.user)
+            self.assertStatusOk(resp)
+            self.assertFalse(os.path.isfile(fAbsPathCopy))
 
             resp = self.request(
                 path='/item/{_id}'.format(**item), method='DELETE',
