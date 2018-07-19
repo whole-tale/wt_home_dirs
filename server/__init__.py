@@ -24,8 +24,10 @@ from .lib.WTFilesystemProvider import WTFilesystemProvider
 from .lib.PathMapper import HomePathMapper, TalePathMapper
 from .lib.WTAssetstoreTypes import WTAssetstoreTypes
 from .lib.WTAssetstoreAdapter import WTHomeAssetstoreAdapter, WTTaleAssetstoreAdapter
-from .lib.EventHandlers import Event, EventHandler, FolderSaveHandler, FolderDeleteHandler
-from .lib.EventHandlers import ItemSaveHandler, AssetstoreQueryHandler, ItemCopyPrepareHandler
+from .lib.EventHandlers import \
+    Event, EventHandler, FolderSaveHandler, FolderDeleteHandler, \
+    ItemSaveHandler, AssetstoreQueryHandler, ItemCopyPrepareHandler, \
+    ItemCopyAfterHandler
 from .resources.homedirpass import Homedirpass
 from girder.utility import assetstore_utilities
 
@@ -153,6 +155,7 @@ def load(info):
     events.bind('model.folder.save', 'wt_home_dir', pathRouter(FolderSaveHandler()))
     events.bind('model.item.save', 'wt_home_dir', pathRouter(ItemSaveHandler()))
     events.bind('model.item.copy.prepare', 'wt_home_dir', pathRouter(ItemCopyPrepareHandler()))
+    events.bind('model.item.copy.after', 'wt_home_dir', pathRouter(ItemCopyAfterHandler()))
 
     setDefaults()
     addAssetstores()

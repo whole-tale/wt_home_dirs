@@ -5,6 +5,7 @@ from wsgidav.dav_provider import DAVCollection
 from wsgidav.fs_dav_provider import FileResource
 from girder.events import Event
 from girder.utility import path as path_util
+from girder.models.file import File
 from girder.models.folder import Folder
 from girder.models.item import Item
 from . WTFilesystemProvider import WTFilesystemProvider, WT_HOME_FLAG
@@ -212,6 +213,20 @@ class ItemCopyPrepareHandler(EventHandler):
         res = self.getResourceInstance(girderSrcPath, pathMapper, provider)
         self.assertIsValidFile(res, girderSrcPath)
         FileResource.copyMoveSingle(res, davDstPath.as_posix(), False)
+
+
+class ItemCopyAfterHandler(EventHandler):
+    def getResourceType(self, event: Event):
+        return 'item'
+
+    def getResource(self, event: Event):
+        return event.info
+
+    def run(self, event: Event, path: pathlib.Path, pathMapper, provider: WTFilesystemProvider):
+        item = self.getResource(event)
+        for file in Item().childFiles(item=item):
+            file['name'] = item['name']
+            File().updateFile(file)
 
 
 class AssetstoreQueryHandler(EventHandler):
