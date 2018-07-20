@@ -261,22 +261,33 @@ class WTFileResource(_WTDAVResource, FileResource):
         itemDoc = self._girderLookup(self._refToGirderPath())
         destGirderParentPath = self.pathMapper.davToGirder(os.path.dirname(destPath))
         girderDestDoc = self._girderLookup(destGirderParentPath)
-        Item().copyItem(srcItem=itemDoc, creator=self.getUser(), name=os.path.basename(destPath),
-                        folder=girderDestDoc, description=WT_HOME_FLAG)
+        item = Item().copyItem(
+            srcItem=itemDoc, creator=self.getUser(), name=os.path.basename(destPath),
+            folder=girderDestDoc, description=WT_HOME_FLAG)
+        self._unifyName(item)
 
     def moveRecursive(self, destPath):
         FileResource.moveRecursive(self, destPath)
         self._girderMoveOrRename(destPath)
 
+    def _unifyName(self, item):
+        for file in Item().childFiles(item=item):
+            file['name'] = item['name']
+            File().updateFile(file)
+
     def _girderUpdateModel(self, doc):
-        Item().updateItem(doc)
+        item = Item().updateItem(doc)
+        self._unifyName(item)
 
     def _girderModelCopy(self, srcDoc, destDoc, destPath):
-        Item().copyItem(srcItem=srcDoc, creator=self.getUser(), parent=destDoc,
-                        name=os.path.basename(destPath), description=WT_HOME_FLAG)
+        item = Item().copyItem(
+            srcItem=srcDoc, creator=self.getUser(), parent=destDoc,
+            name=os.path.basename(destPath), description=WT_HOME_FLAG)
+        self._unifyName(item)
 
     def _girderModelMove(self, doc, destDoc):
-        Item().move(doc, destDoc)
+        item = Item().move(doc, destDoc)
+        self._unifyName(item)
 
 
 # Adds support for 'executable' property

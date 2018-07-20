@@ -7,6 +7,7 @@ from tests import base
 from girder import config
 from girder.models.token import Token
 from girder.utility.model_importer import ModelImporter
+from girder.utility import path as path_util
 from webdavfs.webdavfs import WebDAVFS
 
 os.environ['GIRDER_PORT'] = os.environ.get('GIRDER_PORT', '30001')
@@ -379,12 +380,15 @@ class IntegrationTestCase(base.TestCase):
         imageModel = ModelImporter.model('image', 'wholetale')
         image = imageModel.createImage(recipe, 'test image', creator=user, public=public)
         folderModel = ModelImporter.model('folder')
-        dataFolder = folderModel.createFolder(user, name='Tale Folder', creator=user,
-                                              parentType='user', public=public)
+        dataFolder = path_util.lookUpPath(
+            '/user/{login}/Data'.format(**user), user=user).pop('document')
+        taleFolder = folderModel.createFolder(dataFolder, name='Tale Folder', creator=user,
+                                              parentType='folder', public=public)
         taleModel = ModelImporter.model('tale', 'wholetale')
-        tale = taleModel.createTale(image, dataFolder, creator=user, public=public)
-
-        return tale
+        return taleModel.createTale(
+            image,
+            [{'type': 'folder', 'id': taleFolder['_id']}],
+            creator=user, public=public)
 
     def clearDAVAuthCache(self):
         # need to do this because the DB is wiped on every test, but the dav domain
@@ -670,6 +674,8 @@ class IntegrationTestCase(base.TestCase):
             self.assertEqual(handle.listdir('.'), ['test_dir'])
             self.assertEqual(handle.listdir('test_dir'), ['test_file.txt'])
             fAbsPath = self.homesPhysicalPath(self.user['login'], 'test_dir/test_file.txt')
+            fAbsPathCopy = self.homesPhysicalPath(
+                self.user['login'], 'test_dir/test_file.txt (1)')
             self.assertTrue(os.path.isfile(fAbsPath))
 
             gabspath = '/user/{login}/Home/test_dir/test_file.txt'
@@ -698,6 +704,32 @@ class IntegrationTestCase(base.TestCase):
             self.assertStatusOk(resp)
             with open(fAbsPath, 'r') as fp:
                 self.assertEqual(self.getBody(resp), fp.read())
+
+            resp = self.request(
+                path='/resource/copy', method='POST', user=self.user,
+                params={
+                    'resources': '{"item": ["%s"]}' % item['_id'],
+                    'parentType': 'folder',
+                    'parentId': item['folderId'],
+                    'progress': False
+                }
+            )
+            self.assertStatusOk(resp)
+            self.assertTrue(os.path.isfile(fAbsPathCopy))
+
+            gabspath = '/user/{login}/Home/test_dir/test_file.txt (1)'
+            resp = self.request(
+                path='/resource/lookup', method='GET', user=self.user,
+                params={'path': gabspath.format(**self.user)})
+            self.assertStatusOk(resp)
+            self.assertEqual(resp.json['_modelType'], 'item')
+            self.assertEqual(resp.json['name'], 'test_file.txt (1)')
+            self.assertEqual(resp.json['size'], fsize)
+            resp = self.request(
+                path='/item/{_id}'.format(**resp.json), method='DELETE',
+                user=self.user)
+            self.assertStatusOk(resp)
+            self.assertFalse(os.path.isfile(fAbsPathCopy))
 
             resp = self.request(
                 path='/item/{_id}'.format(**item), method='DELETE',

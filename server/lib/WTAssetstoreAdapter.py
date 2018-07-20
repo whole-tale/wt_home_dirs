@@ -2,15 +2,22 @@
 
 import os
 import pathlib
+import six
+import datetime
 import stat
 import shutil
+import contextlib
 
-from girder.models.upload import Upload
 from girder.models.item import Item
+from girder.models.file import File
 from girder.models.folder import Folder
-from girder.utility import mkdir
+from girder.models.assetstore import Assetstore
+from girder.models.upload import Upload
+from girder.models.user import User
+from girder.utility import \
+    mkdir, hash_state, RequestBodyStream, \
+    assetstore_utilities
 from girder.utility import path as path_lib
-from girder.utility import hash_state
 from girder.utility.filesystem_assetstore_adapter import FilesystemAssetstoreAdapter
 from .PathMapper import PathMapper, HomePathMapper, TalePathMapper
 
@@ -21,7 +28,7 @@ DEFAULT_PERMS = stat.S_IRUSR | stat.S_IWUSR
 
 class WTAssetstoreAdapter(FilesystemAssetstoreAdapter):
     def __init__(self, assetstore, pathMapper: PathMapper):
-        FilesystemAssetstoreAdapter.__init__(self, assetstore)
+        super(WTAssetstoreAdapter, self).__init__(assetstore)
         self.pathMapper = pathMapper
 
     def _getAbsPath(self, parentId, parentType, name):
@@ -53,7 +60,13 @@ class WTAssetstoreAdapter(FilesystemAssetstoreAdapter):
         hash = hash_state.restoreHex(
             upload['sha512state'], 'sha512').hexdigest()
 
-        abspath = self._getAbsPath(upload['parentId'], upload['parentType'], upload['name'])
+        if 'fileId' in upload:
+            file = File().load(upload['fileId'], force=True)
+            abspath = self._getAbsPath(file['itemId'], 'item', file['name'])
+            abspath = os.path.dirname(abspath)
+        else:
+            abspath = self._getAbsPath(upload['parentId'], upload['parentType'], upload['name'])
+
         absdir = os.path.dirname(abspath)
 
         # Store the hash in the upload so that deleting a file won't delete
@@ -81,10 +94,81 @@ class WTAssetstoreAdapter(FilesystemAssetstoreAdapter):
     def deleteFile(self, file):
         # can't rely on 'path' since it's not updated properly on rename/move/copy.
         abspath = self._getAbsPath(file['itemId'], 'item', None)
-        os.remove(abspath)
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(abspath)
 
     def fullPath(self, file):
         return self._getAbsPath(file['itemId'], 'item', None)
+
+    def copyFile(self, srcFile, destFile):
+        """
+        This method copies the necessary fields and data so that the
+        destination file contains the same data as the source file.
+        If a destination File do not belong to WTAssetstore, a snapshot of
+        the File content is made and is uploaded to the current assetstore.
+
+        :param srcFile: The original File document.
+        :type srcFile: dict
+        :param destFile: The File which should have the data copied to it.
+        :type destFile: dict
+        :returns: A dict with the destination file.
+        """
+        destItem = Item().load(id=destFile['itemId'], force=True)
+        destPath = path_lib.getResourcePath('item', destItem, force=True)
+        destInWTHome = self.pathMapper.girderPathMatches(pathlib.Path(destPath))
+
+        srcItem = Item().load(id=srcFile['itemId'], force=True)
+        srcPath = path_lib.getResourcePath('item', srcItem, force=True)
+        srcInWTHome = self.pathMapper.girderPathMatches(pathlib.Path(srcPath))
+
+        if srcInWTHome and not destInWTHome:
+            return self._copyFileFromWT(srcFile, destFile)
+        else:
+            return destFile
+
+    def _copyFileFromWT(self, srcFile, destFile):
+        # TODO: We assume that something other than WebDAV is the default
+        assetstore = Assetstore().getCurrent()
+        adapter = assetstore_utilities.getAssetstoreAdapter(assetstore)
+        now = datetime.datetime.utcnow()
+        user = User().load(destFile['creatorId'], force=True)
+        destFile = File().save(destFile)  # we need Id
+
+        upload = {
+            'created': now,
+            'updated': now,
+            'userId': user['_id'],
+            'fileId': destFile['_id'],
+            'assetstoreId': assetstore['_id'],
+            'size': int(srcFile['size']),
+            'name': destFile['name'],
+            'mimeType': destFile['mimeType'],
+            'received': 0
+        }
+        upload = adapter.initUpload(upload)
+        upload = Upload().save(upload)
+
+        if srcFile['size'] == 0:
+            return File().filter(Upload().finalizeUpload(upload), user)
+        chunkSize = Upload()._getChunkSize()
+        chunk = None
+        for data in File().download(srcFile, headers=False)():
+            if chunk is not None:
+                chunk += data
+            else:
+                chunk = data
+            if len(chunk) >= chunkSize:
+                upload = Upload().handleChunk(
+                    upload, RequestBodyStream(six.BytesIO(chunk), len(chunk))
+                )
+                chunk = None
+
+        if chunk is not None:
+            upload = Upload().handleChunk(
+                upload, RequestBodyStream(six.BytesIO(chunk), len(chunk))
+            )
+        destFile.update(upload)
+        return destFile
 
 
 class WTHomeAssetstoreAdapter(WTAssetstoreAdapter):
