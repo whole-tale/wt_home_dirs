@@ -6,7 +6,7 @@ import pathlib
 
 _logger = util.getModuleLogger(__name__, True)
 
-DAV_READ_OPS = set(['HEAD', 'GET', 'PROPFIND'])
+DAV_READ_OPS = set(['HEAD', 'GET', 'PROPFIND', 'OPTIONS'])
 
 
 class Authorizer(BaseMiddleware):
