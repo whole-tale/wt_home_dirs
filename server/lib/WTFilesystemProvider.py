@@ -245,11 +245,13 @@ class WTFileResource(_WTDAVResource, FileResource):
             file = File().createFile(
                 name=self.name, creator=self.getUser(), item=itemDoc, reuseExisting=True,
                 size=stat.st_size, assetstore=FSProvider.assetstore, saveFile=False)
+            file['size'] = stat.st_size
             file['path'] = self._filePath
             file['mtime'] = stat.st_mtime
             file['description'] = WT_HOME_FLAG
             # file['imported'] = True
             File().save(file)
+            Item().recalculateSize(itemDoc)
         except ResourcePathNotFound:
             pass  # TODO: do something about it?
 
