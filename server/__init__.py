@@ -121,7 +121,7 @@ def startDAVServer(rootPath, directoryInitializer, authorizer, pathMapper, asset
     global HOME_DIRS_APPS
     app = WsgiDAVApp(config)
     HOME_DIRS_APPS.add(realm, pathMapper, app)
-    cherrypy.tree.graft(WsgiDAVApp(config), '/' + realm)
+    cherrypy.tree.graft(app, '/' + realm)
 
 
 def setDefaults():
