@@ -5,6 +5,8 @@ import time
 from bson.objectid import ObjectId
 from tests import base
 from girder import config
+from girder.constants import TokenScope
+from girder.models.api_key import ApiKey
 from girder.models.token import Token
 from girder.utility.model_importer import ModelImporter
 from webdavfs.webdavfs import WebDAVFS
@@ -413,6 +415,9 @@ class IntegrationTestCase(base.TestCase):
         self.admin, self.user = [self.model('user').createUser(**user)
                                  for user in users]
         self.token = Token().createToken(self.user)
+        self.api_key = ApiKey().createApiKey(
+            user=self.user, name="webdav", scope=[TokenScope.DATA_OWN]
+        )
 
         self.privateTale = self.createTale(self.user, public=False)
         # TODO: add tests checking that other users only have read access to public tales
@@ -700,8 +705,9 @@ class IntegrationTestCase(base.TestCase):
                             'user/{login}/Home/ala'.format(**self.user))
             })
 
-        with WebDAVFS(url, login=self.user['login'], password=password,
-                      root=root) as handle:
+        with WebDAVFS(
+            url, login=self.user['login'], password=f"key:{self.api_key['key']}", root=root
+        ) as handle:
             self.assertEqual(handle.listdir('.'), [])
             handle.makedir('test_dir')
 
