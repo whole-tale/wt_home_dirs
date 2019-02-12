@@ -1,7 +1,11 @@
-from girder.utility.model_importer import ModelImporter
-from girder.models.model_base import AccessException
 import datetime
 import time
+from girder import logger
+from girder.constants import SettingKey
+from girder.models.api_key import ApiKey as ApiKeyModel
+from girder.models.model_base import AccessException
+from girder.models.setting import Setting
+from girder.utility.model_importer import ModelImporter
 
 
 class CacheEntry:
@@ -75,9 +79,13 @@ class WTDomainController(object):
         raise Exception('Digest authentication is disabled')
 
     def authDomainUser(self, realmname, username, password, environ):
+        if self._getUser(username) is None:
+            return False
         success = False
         if password.startswith('token:'):
             success = self._authenticateToken(username, password)
+        elif password.startswith('key:'):
+            success = self._authenticateApiKey(username, password)
         else:
             try:
                 self.passwordModel.authenticate(username, password)
@@ -88,6 +96,15 @@ class WTDomainController(object):
         if success:
             environ['WT_DAV_USER_DICT'] = self._getUser(username)
         return success
+
+    def _authenticateApiKey(self, username, password):
+        if not Setting().get(SettingKey.API_KEYS):
+            logger.warn('API key functionality is disabled')
+            return False
+
+        token_user, token = ApiKeyModel().createToken(password[4:], days=7)
+        user = self._getUser(username)
+        return token_user.get('_id', 'no_token') == user['_id']
 
     def _authenticateToken(self, username, password):
         token = self._getToken(password[6:])
