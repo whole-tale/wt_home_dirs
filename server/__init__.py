@@ -89,6 +89,13 @@ def pathRouter(h: EventHandler):
     return handler
 
 
+class WTDAVApp(WsgiDAVApp):
+    def __call__(self, environ, start_response):
+        if 'HTTP_X_FORWARDED_PROTO' in environ:
+            environ['wsgi.url_scheme'] = environ['HTTP_X_FORWARDED_PROTO']
+        return super().__call__(environ, start_response)
+
+
 def startDAVServer(rootPath, directoryInitializer, authorizer, pathMapper, assetstoreType: int):
     if not os.path.exists(rootPath):
         os.makedirs(rootPath)
@@ -119,9 +126,9 @@ def startDAVServer(rootPath, directoryInitializer, authorizer, pathMapper, asset
     if 'GIRDER_TEST_ASSETSTORE' in os.environ:
         config.update({'verbose': 2})
     global HOME_DIRS_APPS
-    app = WsgiDAVApp(config)
+    app = WTDAVApp(config)
     HOME_DIRS_APPS.add(realm, pathMapper, app)
-    cherrypy.tree.graft(WsgiDAVApp(config), '/' + realm)
+    cherrypy.tree.graft(app, '/' + realm)
 
 
 def setDefaults():

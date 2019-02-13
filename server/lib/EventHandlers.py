@@ -212,7 +212,15 @@ class ItemCopyPrepareHandler(EventHandler):
         davDstPath = pathMapper.girderToDav(girderDstPath)
         res = self.getResourceInstance(girderSrcPath, pathMapper, provider)
         self.assertIsValidFile(res, girderSrcPath)
-        FileResource.copyMoveSingle(res, davDstPath.as_posix(), False)
+
+        try:
+            FileResource.copyMoveSingle(res, davDstPath.as_posix(), False)
+        except FileNotFoundError:
+            # Under certain conditions (whole-tale/wt_home_dirs#21) root path
+            # doesn't exist. Create it and try copying again.
+            path = self.getPhysicalPath(girderDstPath, pathMapper, provider)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            FileResource.copyMoveSingle(res, davDstPath.as_posix(), False)
 
 
 class ItemCopyAfterHandler(EventHandler):
