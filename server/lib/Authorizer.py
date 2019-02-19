@@ -2,6 +2,7 @@ from wsgidav.middleware import BaseMiddleware
 from wsgidav import compat, util
 from girder.utility.model_importer import ModelImporter
 from girder.constants import AccessType
+from girder.exceptions import AccessException, ValidationException
 import pathlib
 
 _logger = util.getModuleLogger(__name__, True)
@@ -92,17 +93,19 @@ class TaleAuthorizer(Authorizer):
         user = environ['WT_DAV_USER_DICT']
 
         if self.isReadOp(environ):
-            tale = self.taleModel.load(taleId, user=user, level=AccessType.READ)
+            access_level = AccessType.READ
         else:
-            tale = self.taleModel.load(taleId, user=user, level=AccessType.ADMIN)
+            access_level = AccessType.ADMIN
 
-        if tale is None:
+        try:
+            tale = self.taleModel.load(taleId, user=user, level=access_level, exc=True)
+        except (AccessException, ValidationException):
             body = self.buildNotAuthorizedResponseBody(userName, path)
             return self.sendNotAuthorizedResponse(body, environ, start_response)
-        else:
-            environ['WT_DAV_TALE_DICT'] = tale
-            environ['WT_DAV_TALE_ID'] = taleId
-            return self.application(environ, start_response)
+
+        environ['WT_DAV_TALE_DICT'] = tale
+        environ['WT_DAV_TALE_ID'] = taleId
+        return self.application(environ, start_response)
 
     def getTaleId(self, path: pathlib.Path):
         return path.parts[1]
