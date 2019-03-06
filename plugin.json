@@ -1,6 +1,6 @@
 {
     "name": "WholeTale Home Directory Plugin",
     "description": "Uses WsgiDAV to provide a WebDAV-accessible directory for each user",
-    "version": "0.6.0rc3",
+    "version": "0.6.0",
     "dependencies": ["wholetale"]
 }
