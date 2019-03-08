@@ -1,2 +1,2 @@
-WsgiDAV >= 2.2.4
+WsgiDAV < 3.0.0
 passlib >= 1.7.1
