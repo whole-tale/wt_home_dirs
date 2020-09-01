@@ -1,20 +1,11 @@
 import os
 import stat
-import pathlib
 
-import datetime
 from wsgidav.fs_dav_provider import \
     FilesystemProvider, FolderResource, FileResource
 from wsgidav import compat, util
 from girder import logger
-from girder.utility import path as path_util
-from girder.exceptions import ResourcePathNotFound
-from girder.models.assetstore import Assetstore
-from girder.models.file import File
-from girder.models.folder import Folder
-from girder.models.item import Item
 from .PathMapper import PathMapper
-from .WTAssetstoreTypes import WTAssetstoreTypes
 
 
 PROP_EXECUTABLE = '{http://apache.org/dav/props/}executable'

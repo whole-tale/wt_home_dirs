@@ -12,8 +12,7 @@ from wsgidav.http_authenticator import HTTPAuthenticator
 from wsgidav.error_printer import ErrorPrinter
 from girder import logger
 from girder import events
-from girder.constants import ROOT_DIR
-from girder.models.collection import Collection
+from girder.constants import ROOT_DIR, AccessType, CoreEventHandler
 from girder.models.folder import Folder
 from girder.models.setting import Setting
 from girder.utility import setting_utilities
@@ -24,10 +23,7 @@ from .lib.DirectoryInitializer import HomeDirectoryInitializer, TaleDirectoryIni
 from .lib.WTDomainController import WTDomainController
 from .lib.WTFilesystemProvider import WTFilesystemProvider
 from .lib.PathMapper import HomePathMapper, TalePathMapper
-from .lib.WTAssetstoreTypes import WTAssetstoreTypes
 from .resources.homedirpass import Homedirpass
-from girder.utility import assetstore_utilities
-from girder.plugins.wholetale.constants import WORKSPACE_NAME
 
 
 class AppEntry:
@@ -127,42 +123,36 @@ def setDefaults():
             SettingDefault.defaults[key] = '/tmp/wt-%s-dirs' % name
 
 
-def setHomeFolderMapping(root: str):
-    def fn(event: events.Event):
-        user = event.info
-        m = HomePathMapper()
-        absDir = '%s/%s' % (root, m.davToPhysical('/' + user['name']))
-        homeFolder = Folder().findOne({'parentId': user['_id'], 'name': 'Home'})
-        homeFolder.update({'fsPath': absDir, 'isMapping': True})
-        # We don't want to trigger events here, amirite?
-        Folder().save(homeFolder, False)
+def setHomeFolderMapping(event: events.Event):
+    user = event.info
+    homeDirsRoot = Setting().get(PluginSettings.HOME_DIRS_ROOT)
+    homeFolder = Folder().createFolder(
+        user, "Home", parentType="user", public=False, creator=user
+    )
+    Folder().setUserAccess(homeFolder, user, AccessType.ADMIN, save=False)
 
-    return fn
+    absDir = "%s/%s" % (homeDirsRoot, HomePathMapper().davToPhysical("/" + user["login"]))
+    pathlib.Path(absDir).mkdir(parents=True, exist_ok=True)
+    homeFolder.update({"fsPath": absDir, "isMapping": True})
+    # We don't want to trigger events here, amirite?
+    Folder().save(homeFolder, validate=True, triggerEvents=False)
 
 
-def setTaleFolderMapping(root: str):
-    def fn(event: events.Event):
-        tale = event.info
-        # <WORKSPACE_NAME>[collection]/<WORKSPACE_NAME>[folder]/<tale_id>[folder]
+def setTaleFolderMapping(event: events.Event):
+    tale = event.info
 
-        rootCol = Collection().findOne({'name': WORKSPACE_NAME})
-        rootFolder = Folder().findOne({'name': WORKSPACE_NAME, 'parentId': rootCol['_id']})
-        workspace = Folder().findOne({'name': str(tale['_id']), 'parentId': rootFolder['_id']})
+    if "workspaceId" not in tale:
+        # there are two saves when a tale is created: one before all the aux folders (including
+        # the workspace folder) are created and one after. This handler will get called in both
+        # cases, and we need to wait for the latter call, which this test does.
+        return
 
-        if workspace is None:
-            # there are two saves when a tale is created: one before all the aux folders (including
-            # the workspace folder) are created and one after. This handler will get called in both
-            # cases, and we need to wait for the latter call, which this test does.
-            return
-
-        m = TalePathMapper()
-        absDir = '%s/%s' % (root, m.davToPhysical('/' + str(tale['_id'])))
-        pathlib.Path(absDir).mkdir(parents=True, exist_ok=True)
-
-        workspace.update({'fsPath': absDir, 'isMapping': True})
-        Folder().save(workspace, False)
-
-    return fn
+    root = Setting().get(PluginSettings.TALE_DIRS_ROOT)
+    workspace = Folder().load(tale["workspaceId"], force=True)
+    absDir = "%s/%s" % (root, TalePathMapper().davToPhysical("/" + str(tale["_id"])))
+    pathlib.Path(absDir).mkdir(parents=True, exist_ok=True)
+    workspace.update({'fsPath': absDir, 'isMapping': True})
+    Folder().save(workspace, validate=True, triggerEvents=False)
 
 
 def load(info):
@@ -178,8 +168,9 @@ def load(info):
     logger.info('WT Tale Dirs root: %s' % taleDirsRoot)
     startDAVServer(taleDirsRoot, TaleDirectoryInitializer, TaleAuthorizer, TalePathMapper())
 
-    events.bind('model.user.save.after', 'wt_home_dirs', setHomeFolderMapping(homeDirsRoot))
-    events.bind('model.tale.save.after', 'wt_home_dirs', setTaleFolderMapping(taleDirsRoot))
+    events.unbind('model.user.save.created', CoreEventHandler.USER_DEFAULT_FOLDERS)
+    events.bind('model.user.save.created', 'wt_home_dirs', setHomeFolderMapping)
+    events.bind('model.tale.save.after', 'wt_home_dirs', setTaleFolderMapping)
 
     hdp = Homedirpass()
     info['apiRoot'].homedirpass = hdp
