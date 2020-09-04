@@ -42,7 +42,7 @@ jobs:
           command: pip install codecov
       - run:
           name: Collect coverage reports
-          command: cp /girder/.coverage .
+          command: coverage combine /girder/build/test/coverage/python_temp/
       - run:
           name: Uploading Coverage Results
           command: codecov
