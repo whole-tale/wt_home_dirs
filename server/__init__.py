@@ -132,8 +132,9 @@ def setHomeFolderMapping(event: events.Event):
     Folder().setUserAccess(homeFolder, user, AccessType.ADMIN, save=False)
 
     absDir = "%s/%s" % (homeDirsRoot, HomePathMapper().davToPhysical("/" + user["login"]))
-    pathlib.Path(absDir).mkdir(parents=True, exist_ok=True)
-    homeFolder.update({"fsPath": absDir, "isMapping": True})
+    absDir = pathlib.Path(absDir)
+    absDir.mkdir(parents=True, exist_ok=True)
+    homeFolder.update({"fsPath": absDir.as_posix(), "isMapping": True})
     # We don't want to trigger events here, amirite?
     Folder().save(homeFolder, validate=True, triggerEvents=False)
 
@@ -150,8 +151,9 @@ def setTaleFolderMapping(event: events.Event):
     root = Setting().get(PluginSettings.TALE_DIRS_ROOT)
     workspace = Folder().load(tale["workspaceId"], force=True)
     absDir = "%s/%s" % (root, TalePathMapper().davToPhysical("/" + str(tale["_id"])))
-    pathlib.Path(absDir).mkdir(parents=True, exist_ok=True)
-    workspace.update({'fsPath': absDir, 'isMapping': True})
+    absDir = pathlib.Path(absDir)
+    absDir.mkdir(parents=True, exist_ok=True)
+    workspace.update({'fsPath': absDir.as_posix(), 'isMapping': True})
     Folder().save(workspace, validate=True, triggerEvents=False)
 
 
