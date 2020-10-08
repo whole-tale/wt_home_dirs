@@ -12,7 +12,8 @@ from wsgidav.http_authenticator import HTTPAuthenticator
 from wsgidav.error_printer import ErrorPrinter
 from girder import logger
 from girder import events
-from girder.constants import ROOT_DIR
+from girder.constants import ROOT_DIR, AccessType, CoreEventHandler
+from girder.models.folder import Folder
 from girder.models.setting import Setting
 from girder.utility import setting_utilities
 from girder.constants import SettingDefault
@@ -22,14 +23,7 @@ from .lib.DirectoryInitializer import HomeDirectoryInitializer, TaleDirectoryIni
 from .lib.WTDomainController import WTDomainController
 from .lib.WTFilesystemProvider import WTFilesystemProvider
 from .lib.PathMapper import HomePathMapper, TalePathMapper
-from .lib.WTAssetstoreTypes import WTAssetstoreTypes
-from .lib.WTAssetstoreAdapter import WTHomeAssetstoreAdapter, WTTaleAssetstoreAdapter
-from .lib.EventHandlers import \
-    Event, EventHandler, FolderSaveHandler, FolderDeleteHandler, \
-    ItemSaveHandler, AssetstoreQueryHandler, ItemCopyPrepareHandler, \
-    ItemCopyAfterHandler
 from .resources.homedirpass import Homedirpass
-from girder.utility import assetstore_utilities
 
 
 class AppEntry:
@@ -69,26 +63,6 @@ def validateOtherSettings(event):
     pass
 
 
-def pathRouter(h: EventHandler):
-    def handler(event: Event):
-        path = pathlib.Path(h.getPath(event))
-        for e in HOME_DIRS_APPS.entries():
-            if e.pathMapper.girderPathMatches(path):
-                provider = e.app.providerMap['/']['provider']
-                logger.debug('Handling %s (%s) using %s' % (event, path, provider.rootFolderPath))
-                try:
-                    h.run(event, path, e.pathMapper, provider)
-                except Exception as ex:
-                    # hey, girder, when you have stuff like this that can be asynchroneous you
-                    # need a mechanism to propagate errors so that the exception doesn't end up
-                    # ignored in your event dispatch thread
-                    logger.warning('Exception caught while handling event %s: %s' % (event, ex))
-                    raise
-                return
-
-    return handler
-
-
 class WTDAVApp(WsgiDAVApp):
     def __call__(self, environ, start_response):
         if 'HTTP_X_FORWARDED_PROTO' in environ:
@@ -96,11 +70,11 @@ class WTDAVApp(WsgiDAVApp):
         return super().__call__(environ, start_response)
 
 
-def startDAVServer(rootPath, directoryInitializer, authorizer, pathMapper, assetstoreType: int):
+def startDAVServer(rootPath, directoryInitializer, authorizer, pathMapper):
     if not os.path.exists(rootPath):
         os.makedirs(rootPath)
 
-    provider = WTFilesystemProvider(rootPath, pathMapper, assetstoreType)
+    provider = WTFilesystemProvider(rootPath, pathMapper)
     realm = pathMapper.getRealm()
     config = DEFAULT_CONFIG.copy()
     # Accept basic authentication and assume access through HTTPS only. This (HTTPS when only
@@ -149,35 +123,56 @@ def setDefaults():
             SettingDefault.defaults[key] = '/tmp/wt-%s-dirs' % name
 
 
-def addAssetstores():
-    assetstore_utilities.setAssetstoreAdapter(WTAssetstoreTypes.WT_HOME_ASSETSTORE,
-                                              WTHomeAssetstoreAdapter)
-    assetstore_utilities.setAssetstoreAdapter(WTAssetstoreTypes.WT_TALE_ASSETSTORE,
-                                              WTTaleAssetstoreAdapter)
+def setHomeFolderMapping(event: events.Event):
+    user = event.info
+    homeDirsRoot = Setting().get(PluginSettings.HOME_DIRS_ROOT)
+    homeFolder = Folder().createFolder(
+        user, "Home", parentType="user", public=False, creator=user
+    )
+    Folder().setUserAccess(homeFolder, user, AccessType.ADMIN, save=False)
+
+    absDir = "%s/%s" % (homeDirsRoot, HomePathMapper().davToPhysical("/" + user["login"]))
+    absDir = pathlib.Path(absDir)
+    absDir.mkdir(parents=True, exist_ok=True)
+    homeFolder.update({"fsPath": absDir.as_posix(), "isMapping": True})
+    # We don't want to trigger events here, amirite?
+    Folder().save(homeFolder, validate=True, triggerEvents=False)
+
+
+def setTaleFolderMapping(event: events.Event):
+    tale = event.info
+
+    if "workspaceId" not in tale:
+        # there are two saves when a tale is created: one before all the aux folders (including
+        # the workspace folder) are created and one after. This handler will get called in both
+        # cases, and we need to wait for the latter call, which this test does.
+        return
+
+    root = Setting().get(PluginSettings.TALE_DIRS_ROOT)
+    workspace = Folder().load(tale["workspaceId"], force=True)
+    absDir = "%s/%s" % (root, TalePathMapper().davToPhysical("/" + str(tale["_id"])))
+    absDir = pathlib.Path(absDir)
+    absDir.mkdir(parents=True, exist_ok=True)
+    workspace.update({'fsPath': absDir.as_posix(), 'isMapping': True})
+    Folder().save(workspace, validate=True, triggerEvents=False)
 
 
 def load(info):
-    events.bind('model.folder.remove', 'wt_home_dir', pathRouter(FolderDeleteHandler()))
-    events.bind('model.upload.assetstore', 'wt_home_dir', pathRouter(AssetstoreQueryHandler()))
-    events.bind('model.folder.save', 'wt_home_dir', pathRouter(FolderSaveHandler()))
-    events.bind('model.item.save', 'wt_home_dir', pathRouter(ItemSaveHandler()))
-    events.bind('model.item.copy.prepare', 'wt_home_dir', pathRouter(ItemCopyPrepareHandler()))
-    events.bind('model.item.copy.after', 'wt_home_dir', pathRouter(ItemCopyAfterHandler()))
-
     setDefaults()
-    addAssetstores()
 
     settings = Setting()
 
     homeDirsRoot = settings.get(PluginSettings.HOME_DIRS_ROOT)
     logger.info('WT Home Dirs root: %s' % homeDirsRoot)
-    startDAVServer(homeDirsRoot, HomeDirectoryInitializer, HomeAuthorizer, HomePathMapper(),
-                   WTAssetstoreTypes.WT_HOME_ASSETSTORE)
+    startDAVServer(homeDirsRoot, HomeDirectoryInitializer, HomeAuthorizer, HomePathMapper())
 
     taleDirsRoot = settings.get(PluginSettings.TALE_DIRS_ROOT)
     logger.info('WT Tale Dirs root: %s' % taleDirsRoot)
-    startDAVServer(taleDirsRoot, TaleDirectoryInitializer, TaleAuthorizer, TalePathMapper(),
-                   WTAssetstoreTypes.WT_TALE_ASSETSTORE)
+    startDAVServer(taleDirsRoot, TaleDirectoryInitializer, TaleAuthorizer, TalePathMapper())
+
+    events.unbind('model.user.save.created', CoreEventHandler.USER_DEFAULT_FOLDERS)
+    events.bind('model.user.save.created', 'wt_home_dirs', setHomeFolderMapping)
+    events.bind('model.tale.save.after', 'wt_home_dirs', setTaleFolderMapping)
 
     hdp = Homedirpass()
     info['apiRoot'].homedirpass = hdp

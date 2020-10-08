@@ -18,7 +18,8 @@ class DirectoryInitializer(BaseMiddleware):
             root = self.config['wt_home_dirs_root']
             if root is None:
                 raise EnvironmentError('wt_home_dirs_root not in config')
-            os.makedirs('/%s/%s' % (root, subdir), exist_ok=True)
+            path = '/%s/%s' % (root, subdir)
+            os.makedirs(path, exist_ok=True)
             self.initializedFor[subdir] = True
         # use a multi-level path such that we don't end up with a large number of
         # entries in a single directory.

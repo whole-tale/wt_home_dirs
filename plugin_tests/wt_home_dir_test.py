@@ -7,7 +7,6 @@ from tests import base
 from girder import config
 from girder.models.token import Token
 from girder.utility.model_importer import ModelImporter
-from girder.utility import path as path_util
 from webdavfs.webdavfs import WebDAVFS
 
 os.environ['GIRDER_PORT'] = os.environ.get('GIRDER_PORT', '30001')
@@ -19,6 +18,7 @@ FILE_CONTENTS = ''.join(['0123456789abcdefghijklmnopqrstuvxyz' for i in range(10
 def setUpModule():
     base.enabledPlugins.append('wholetale')
     base.enabledPlugins.append('wt_home_dir')
+    base.enabledPlugins.append('virtual_resources')
     base.startServer(mock=False)
 
 
@@ -293,12 +293,58 @@ class GirderAdapter(Adapter):
         self.mustSucceed(path='/item/%s' % srcId, method='PUT', user=self.user,
                          params={'name': newName, 'folderId': dstId})
 
+    def _upload_file(self, name, contents, user, parent, parentType="folder",
+                     mimeType=None):
+        """
+        Upload a file. This is meant for small testing files, not very large
+        files that should be sent in multiple chunks.
+
+        :param name: The name of the file.
+        :type name: str
+        :param contents: The file contents
+        :type contents: str
+        :param user: The user performing the upload.
+        :type user: dict
+        :param parent: The parent document.
+        :type parent: dict
+        :param parentType: The type of the parent ("folder" or "item")
+        :type parentType: str
+        :param mimeType: Explicit MIME type to set on the file.
+        :type mimeType: str
+        :returns: The file that was created.
+        :rtype: dict
+        """
+        mimeType = mimeType or 'application/octet-stream'
+        resp = self.client.request(
+            path='/file', method='POST', user=user, params={
+                'parentType': parentType,
+                'parentId': str(parent['_id']),
+                'name': name,
+                'size': len(contents),
+                'mimeType': mimeType
+            })
+        self.client.assertStatusOk(resp)
+
+        fields = [('offset', 0), ('uploadId', resp.json['_id'])]
+        files = [('chunk', name, contents)]
+        resp = self.client.multipartRequest(
+            path='/file/chunk', user=user, fields=fields, files=files)
+        self.client.assertStatusOk(resp)
+
+        _file = resp.json
+        self.client.assertHasKeys(_file, ['itemId'])
+        self.client.assertEqual(_file['name'], name)
+        self.client.assertEqual(_file['size'], len(contents))
+        self.client.assertEqual(_file['mimeType'], mimeType)
+
+        return _file
+
     def mkfile(self, path, data):
         parentPath = os.path.dirname(path)
         parent = self.getFolder(parentPath)
         name = os.path.basename(path)
-        resp = self.client.uploadFile(name, data, user=self.user, parent=parent.json,
-                                      parentType='folder')
+        resp = self._upload_file(name, data, user=self.user, parent=parent.json,
+                                 parentType='folder')
         if '_id' not in resp:
             raise Exception('Request failed with response %s' % resp)
 
@@ -347,7 +393,6 @@ class IntegrationTestCase(base.TestCase):
         # girder.plugins is not available until setUp is running
         for e in self.homeDirsApps.entries():
             provider = e.app.providerMap['/']['provider']
-            provider.updateAssetstore()
             if e.realm == 'homes':
                 self.homesRoot = provider.rootFolderPath
                 self.homesPathMapper = e.pathMapper
@@ -379,16 +424,8 @@ class IntegrationTestCase(base.TestCase):
         recipe = {'_id': ObjectId()}
         imageModel = ModelImporter.model('image', 'wholetale')
         image = imageModel.createImage(recipe, 'test image', creator=user, public=public)
-        folderModel = ModelImporter.model('folder')
-        dataFolder = path_util.lookUpPath(
-            '/user/{login}/Data'.format(**user), user=user).pop('document')
-        taleFolder = folderModel.createFolder(dataFolder, name='Tale Folder', creator=user,
-                                              parentType='folder', public=public)
         taleModel = ModelImporter.model('tale', 'wholetale')
-        return taleModel.createTale(
-            image,
-            [{'type': 'folder', 'id': taleFolder['_id']}],
-            creator=user, public=public)
+        return taleModel.createTale(image, [], creator=user, public=public)
 
     def clearDAVAuthCache(self):
         # need to do this because the DB is wiped on every test, but the dav domain
