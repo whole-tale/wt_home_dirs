@@ -1,6 +1,7 @@
 import os
 import stat
 
+from wsgidav.dav_error import DAVError, HTTP_FORBIDDEN
 from wsgidav.fs_dav_provider import \
     FilesystemProvider, FolderResource, FileResource
 from wsgidav import compat, util
@@ -94,6 +95,18 @@ class WTFileResource(_WTDAVResource, FileResource):
         else:
             self.removeAllProperties(True)
             self.removeAllLocks(True)
+
+    def beginWrite(self, contentType=None):
+        # Override to delete file instead of simply truncating in order to
+        # preserve hard-linked content to current data
+
+        # Do these checks that also happen in the super() method before actually
+        # taking a destructive action
+        assert not self.isCollection
+        if self.provider.readonly:
+            raise DAVError(HTTP_FORBIDDEN)
+        os.remove(self._filePath)
+        return super().beginWrite(contentType=contentType)
 
 
 # Adds support for 'executable' property
