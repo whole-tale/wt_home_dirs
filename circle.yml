@@ -27,9 +27,6 @@ jobs:
             cp /tmp/girder/.coveragerc /girder/
             cp /root/project/setup.cfg /girder/
             cp -r /tmp/girder/tests /girder/
-            rm -rf /girder/plugins/wholetale  # remove before merging
-            git clone https://github.com/whole-tale/girder_wholetale -b virtual_resources /girder/plugins/wholetale  # remove before merging
-            set -o pipefail; pip install -r /girder/plugins/wholetale/requirements.txt | cat  # remove before merging
       - run:
           name: Running Tests
           environment:
