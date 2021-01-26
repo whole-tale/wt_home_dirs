@@ -15,9 +15,12 @@ from girder import events
 from girder.constants import ROOT_DIR, AccessType, CoreEventHandler
 from girder.models.folder import Folder
 from girder.models.setting import Setting
+from girder.models.user import User
 from girder.utility import setting_utilities
 from girder.constants import SettingDefault
-from .constants import PluginSettings
+from girder.plugins.wholetale.models.tale import Tale
+
+from .constants import PluginSettings, WORKSPACE_NAME
 from .lib.Authorizer import HomeAuthorizer, TaleAuthorizer
 from .lib.DirectoryInitializer import HomeDirectoryInitializer, TaleDirectoryInitializer
 from .lib.WTDomainController import WTDomainController
@@ -141,20 +144,17 @@ def setHomeFolderMapping(event: events.Event):
 
 def setTaleFolderMapping(event: events.Event):
     tale = event.info
-
-    if "workspaceId" not in tale:
-        # there are two saves when a tale is created: one before all the aux folders (including
-        # the workspace folder) are created and one after. This handler will get called in both
-        # cases, and we need to wait for the latter call, which this test does.
-        return
-
-    root = Setting().get(PluginSettings.TALE_DIRS_ROOT)
-    workspace = Folder().load(tale["workspaceId"], force=True)
-    absDir = "%s/%s" % (root, TalePathMapper().davToPhysical("/" + str(tale["_id"])))
+    root_path = Setting().get(PluginSettings.TALE_DIRS_ROOT)
+    creator = User().load(tale["creatorId"], force=True)
+    workspace = Tale()._createAuxFolder(tale, WORKSPACE_NAME, creator=creator)
+    absDir = "%s/%s" % (root_path, TalePathMapper().davToPhysical("/" + str(tale["_id"])))
     absDir = pathlib.Path(absDir)
     absDir.mkdir(parents=True, exist_ok=True)
     workspace.update({'fsPath': absDir.as_posix(), 'isMapping': True})
     Folder().save(workspace, validate=True, triggerEvents=False)
+    tale["workspaceId"] = workspace["_id"]
+    tale = Tale().save(tale)
+    event.addResponse(tale)
 
 
 def load(info):
@@ -172,9 +172,11 @@ def load(info):
 
     events.unbind('model.user.save.created', CoreEventHandler.USER_DEFAULT_FOLDERS)
     events.bind('model.user.save.created', 'wt_home_dirs', setHomeFolderMapping)
-    events.bind('model.tale.save.after', 'wt_home_dirs', setTaleFolderMapping)
+    events.bind('model.tale.save.created', 'wt_home_dirs', setTaleFolderMapping)
 
     hdp = Homedirpass()
     info['apiRoot'].homedirpass = hdp
     info['apiRoot'].homedirpass.route('GET', ('generate',), hdp.generatePassword)
     info['apiRoot'].homedirpass.route('PUT', ('set',), hdp.setPassword)
+
+    Tale().exposeFields(level=AccessType.READ, fields={"workspaceId"})

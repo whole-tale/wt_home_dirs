@@ -1,6 +1,6 @@
 import pathlib
 from typing import Union
-from girder.plugins.wholetale.constants import WORKSPACE_NAME
+from ..constants import WORKSPACE_NAME
 
 
 class PathMapper:
