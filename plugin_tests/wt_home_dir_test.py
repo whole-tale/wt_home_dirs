@@ -385,7 +385,7 @@ class IntegrationTestCase(base.TestCase):
         base.TestCase.setUp(self)
         from girder.plugins.wt_home_dir import HOME_DIRS_APPS
         self.homeDirsApps = HOME_DIRS_APPS  # nopep8
-        from girder.plugins.wholetale.constants import WORKSPACE_NAME
+        from girder.plugins.wt_home_dir.constants import WORKSPACE_NAME
         global WORKSPACE_NAME
         # We need to recreate DirectFS assetstore, which was dropped in
         # base.TestCase.setUp...
