@@ -95,7 +95,7 @@ class TaleAuthorizer(Authorizer):
         if self.isReadOp(environ):
             access_level = AccessType.READ
         else:
-            access_level = AccessType.ADMIN
+            access_level = AccessType.WRITE
 
         try:
             tale = self.taleModel.load(taleId, user=user, level=access_level, exc=True)
