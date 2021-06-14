@@ -22,11 +22,15 @@ from girder.constants import SettingDefault
 from girder.plugins.wholetale.models.tale import Tale
 
 from .constants import PluginSettings, WORKSPACE_NAME
-from .lib.Authorizer import HomeAuthorizer, TaleAuthorizer
-from .lib.DirectoryInitializer import HomeDirectoryInitializer, TaleDirectoryInitializer
+from .lib.Authorizer import HomeAuthorizer, TaleAuthorizer, RunsAuthorizer
+from .lib.DirectoryInitializer import (
+    HomeDirectoryInitializer,
+    TaleDirectoryInitializer,
+    RunsDirectoryInitializer
+)
 from .lib.WTDomainController import WTDomainController
 from .lib.WTFilesystemProvider import WTFilesystemProvider
-from .lib.PathMapper import HomePathMapper, TalePathMapper
+from .lib.PathMapper import HomePathMapper, TalePathMapper, RunsPathMapper
 from .resources.homedirpass import Homedirpass
 
 
@@ -178,6 +182,11 @@ def load(info):
     taleDirsRoot = settings.get(PluginSettings.TALE_DIRS_ROOT)
     logger.info('WT Tale Dirs root: %s' % taleDirsRoot)
     startDAVServer(taleDirsRoot, TaleDirectoryInitializer, TaleAuthorizer, TalePathMapper())
+
+    runsDirsRoot = settings.get(PluginSettings.RUNS_DIRS_ROOT)
+    if runsDirsRoot:
+        logger.info('WT Runs Dirs root: %s' % runsDirsRoot)
+        startDAVServer(runsDirsRoot, RunsDirectoryInitializer, RunsAuthorizer, RunsPathMapper())
 
     events.unbind('model.user.save.created', CoreEventHandler.USER_DEFAULT_FOLDERS)
     events.bind('model.user.save.created', 'wt_home_dirs', setHomeFolderMapping)
