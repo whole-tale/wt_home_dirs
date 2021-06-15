@@ -4,6 +4,7 @@
 import cherrypy
 import os
 import pathlib
+import shutil
 import tempfile
 from wsgidav.wsgidav_app import DEFAULT_CONFIG, WsgiDAVApp
 from wsgidav.dir_browser import WsgiDavDirBrowser
@@ -157,6 +158,14 @@ def setTaleFolderMapping(event: events.Event):
     event.addResponse(tale)
 
 
+def deleteWorkspace(event: events.Event):
+    tale = event.info
+    if (workspace := Folder().load(tale["workspaceId"], force=True)):
+        if "fsPath" in workspace:
+            shutil.rmtree(workspace["fsPath"])
+        Folder().remove(workspace)
+
+
 def load(info):
     setDefaults()
 
@@ -173,6 +182,7 @@ def load(info):
     events.unbind('model.user.save.created', CoreEventHandler.USER_DEFAULT_FOLDERS)
     events.bind('model.user.save.created', 'wt_home_dirs', setHomeFolderMapping)
     events.bind('model.tale.save.created', 'wt_home_dirs', setTaleFolderMapping)
+    events.bind('model.tale.remove', 'wt_home_dirs', deleteWorkspace)
 
     hdp = Homedirpass()
     info['apiRoot'].homedirpass = hdp
