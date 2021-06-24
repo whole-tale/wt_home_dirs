@@ -788,3 +788,14 @@ class IntegrationTestCase(base.TestCase):
                 user=self.user)
             self.assertStatusOk(resp)
             self.assertFalse(os.path.isdir(fAbsPath))
+
+    def testWorkspaceRemoval(self):
+        from girder.plugins.wholetale.models.tale import Tale
+        from girder.models.folder import Folder
+        tale = self.createTale(self.user, public=False)
+        workspace = Folder().load(tale["workspaceId"], force=True)
+        self.assertTrue(os.path.isdir(workspace["fsPath"]))
+        Tale().remove(tale)
+        self.assertFalse(os.path.isdir(workspace["fsPath"]))
+        workspace = Folder().load(tale["workspaceId"], force=True)
+        self.assertEqual(workspace, None)
