@@ -674,10 +674,10 @@ class IntegrationTestCase(base.TestCase):
         time.sleep(1)
         with WebDAVFS(url, login=self.user['login'], password=password,
                       root=root) as handle:
-            self.assertEqual(handle.listdir('.'), [])
+            self.assertEqual(list(handle.listdir('.')), [])
             handle.makedir('ala')
             # exists in WebDAV
-            self.assertEqual(handle.listdir('.'), ['ala'])
+            self.assertEqual(list(handle.listdir('.')), ['ala'])
             # exists on the backend
             physDirPath = self.homesPhysicalPath(self.user['login'], 'ala')
             self.assertTrue(os.path.isdir(physDirPath))
@@ -691,7 +691,7 @@ class IntegrationTestCase(base.TestCase):
 
             handle.removedir('ala')
             # gone from WebDAV
-            self.assertEqual(handle.listdir('.'), [])
+            self.assertEqual(list(handle.listdir('.')), [])
             # gone from the backend
             self.assertFalse(os.path.isdir(physDirPath))
             # gone from Girder
@@ -708,14 +708,14 @@ class IntegrationTestCase(base.TestCase):
         with WebDAVFS(
             url, login=self.user['login'], password=f"key:{self.api_key['key']}", root=root
         ) as handle:
-            self.assertEqual(handle.listdir('.'), [])
+            self.assertEqual(list(handle.listdir('.')), [])
             handle.makedir('test_dir')
 
             with handle.open('test_dir/test_file.txt', 'w') as fp:
                 fsize = fp.write('Hello world!')
 
-            self.assertEqual(handle.listdir('.'), ['test_dir'])
-            self.assertEqual(handle.listdir('test_dir'), ['test_file.txt'])
+            self.assertEqual(list(handle.listdir('.')), ['test_dir'])
+            self.assertEqual(list(handle.listdir('test_dir')), ['test_file.txt'])
             fAbsPath = self.homesPhysicalPath(self.user['login'], 'test_dir/test_file.txt')
             fAbsPathCopy = self.homesPhysicalPath(
                 self.user['login'], 'test_dir/test_file.txt (1)')
@@ -788,3 +788,14 @@ class IntegrationTestCase(base.TestCase):
                 user=self.user)
             self.assertStatusOk(resp)
             self.assertFalse(os.path.isdir(fAbsPath))
+
+    def testWorkspaceRemoval(self):
+        from girder.plugins.wholetale.models.tale import Tale
+        from girder.models.folder import Folder
+        tale = self.createTale(self.user, public=False)
+        workspace = Folder().load(tale["workspaceId"], force=True)
+        self.assertTrue(os.path.isdir(workspace["fsPath"]))
+        Tale().remove(tale)
+        self.assertFalse(os.path.isdir(workspace["fsPath"]))
+        workspace = Folder().load(tale["workspaceId"], force=True)
+        self.assertEqual(workspace, None)
