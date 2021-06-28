@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
+import pathlib
+import shutil
 import time
-from bson.objectid import ObjectId
 from tests import base
 from girder import config
 from girder.constants import TokenScope
 from girder.models.api_key import ApiKey
+from girder.models.folder import Folder
+from girder.models.setting import Setting
 from girder.models.token import Token
-from girder.utility.model_importer import ModelImporter
 from webdavfs.webdavfs import WebDAVFS
 
 os.environ['GIRDER_PORT'] = os.environ.get('GIRDER_PORT', '30001')
@@ -21,6 +23,7 @@ def setUpModule():
     base.enabledPlugins.append('wholetale')
     base.enabledPlugins.append('wt_home_dir')
     base.enabledPlugins.append('virtual_resources')
+    base.enabledPlugins.append('wt_versioning')
     base.startServer(mock=False)
 
 
@@ -384,7 +387,7 @@ class GirderAdapter(Adapter):
 
 class IntegrationTestCase(base.TestCase):
     def setUp(self):
-        base.TestCase.setUp(self)
+        super().setUp(self)
         from girder.plugins.wt_home_dir import HOME_DIRS_APPS
         self.homeDirsApps = HOME_DIRS_APPS  # nopep8
         from girder.plugins.wt_home_dir.constants import WORKSPACE_NAME
@@ -393,8 +396,10 @@ class IntegrationTestCase(base.TestCase):
         # base.TestCase.setUp...
 
         # girder.plugins is not available until setUp is running
+        self.rootPaths = {}
         for e in self.homeDirsApps.entries():
             provider = e.app.providerMap['/']['provider']
+            self.rootPaths[e.realm] = provider.rootFolderPath
             if e.realm == 'homes':
                 self.homesRoot = provider.rootFolderPath
                 self.homesPathMapper = e.pathMapper
@@ -419,27 +424,28 @@ class IntegrationTestCase(base.TestCase):
             user=self.user, name="webdav", scope=[TokenScope.DATA_OWN]
         )
 
-        self.privateTale = self.createTale(self.user, public=False)
-        # TODO: add tests checking that other users only have read access to public tales
-        self.publicTale = self.createTale(self.admin, public=True)
-        self.clearDAVAuthCache()
+        from girder.plugins.wt_versioning.constants import PluginSettings as \
+            VerPluginSettings
+        Setting().set(VerPluginSettings.RUNS_DIRS_ROOT, self.rootPaths["runs"])
+        # Needs to be on the same level as runs and needs to be called versions...
+        version_root = pathlib.Path(os.path.dirname(self.rootPaths["runs"])) / "versions"
+        if not version_root.is_dir():
+            version_root.mkdir()
+        Setting().set(VerPluginSettings.VERSIONS_DIRS_ROOT, version_root.as_posix())
 
-    def createTale(self, user, public):
-        # fake a recipe because the model downloads actual stuff
-        recipe = {'_id': ObjectId()}
-        imageModel = ModelImporter.model('image', 'wholetale')
-        image = imageModel.createImage(recipe, 'test image', creator=user, public=public)
-        taleModel = ModelImporter.model('tale', 'wholetale')
-        return taleModel.createTale(image, [], creator=user, public=public)
+        from girder.plugins.wholetale.models.image import Image
+        from girder.plugins.wholetale.models.tale import Tale
+        image = Image().createImage(name='test image', creator=self.admin, public=True)
+        self.privateTale = Tale().createTale(image, [], creator=self.user, public=False)
+        # TODO: add tests checking that other users only have read access to public tales
+        self.publicTale = Tale().createTale(image, [], creator=self.user, public=True)
+        self.clearDAVAuthCache()
 
     def clearDAVAuthCache(self):
         # need to do this because the DB is wiped on every test, but the dav domain
         # controller keeps a cache with users/tokens
         for e in self.homeDirsApps.entries():
             e.app.config['domaincontroller'].clearCache()
-
-    def tearDown(self):
-        base.TestCase.tearDown(self)
 
     def homesPhysicalPath(self, userName, path):
         return '%s/%s' % (self.homesRoot,
@@ -453,6 +459,8 @@ class IntegrationTestCase(base.TestCase):
                 continue
             elif e.realm == 'homes':
                 self.makeHomeAdapters(e.pathMapper, e.app, self.user)
+            elif e.realm == 'runs':
+                continue  # Tested separately
             else:
                 raise Exception('Unknonw realm %s' % e.realm)
             fn()
@@ -789,13 +797,52 @@ class IntegrationTestCase(base.TestCase):
             self.assertStatusOk(resp)
             self.assertFalse(os.path.isdir(fAbsPath))
 
-    def testWorkspaceRemoval(self):
+    def test14RunDir(self):
+        resp = self.request(
+            path="/version", method="POST", user=self.user,
+            params={"taleId": self.privateTale["_id"]}
+        )
+        self.assertStatusOk(resp)
+        version = resp.json
+
+        resp = self.request(
+            path="/run", method="POST", user=self.user,
+            params={"versionId": version["_id"], "name": "test run"},
+        )
+        self.assertStatusOk(resp)
+        run_folder = Folder().load(resp.json["_id"], force=True)
+
+        url = f"http://127.0.0.1:{os.environ['GIRDER_PORT']}"
+        root = f"/runs/{run_folder['_id']}"
+        password = f"token:{self.token['_id']}"
+        time.sleep(1)
+        with WebDAVFS(
+            url, login=self.user["login"], password=password, root=root
+        ) as handle:
+            self.assertEqual(list(handle.listdir('.')), [])
+            handle.makedir('ala')
+            # exists in WebDAV
+            self.assertEqual(list(handle.listdir('.')), ['ala'])
+            # exists on the backend
+            physDirPath = pathlib.Path(run_folder["fsPath"]) / "workspace" / "ala"
+            self.assertTrue(os.path.isdir(physDirPath))
+            handle.removedir('ala')
+            # gone from WebDAV
+            self.assertEqual(list(handle.listdir('.')), [])
+            # gone from the backend
+            self.assertFalse(os.path.isdir(physDirPath))
+
+    def test15WorkspaceRemoval(self):
         from girder.plugins.wholetale.models.tale import Tale
         from girder.models.folder import Folder
-        tale = self.createTale(self.user, public=False)
-        workspace = Folder().load(tale["workspaceId"], force=True)
+        workspace = Folder().load(self.publicTale["workspaceId"], force=True)
         self.assertTrue(os.path.isdir(workspace["fsPath"]))
-        Tale().remove(tale)
+        Tale().remove(self.publicTale)
         self.assertFalse(os.path.isdir(workspace["fsPath"]))
-        workspace = Folder().load(tale["workspaceId"], force=True)
+        workspace = Folder().load(workspace["_id"], force=True)
         self.assertEqual(workspace, None)
+
+    def tearDown(self):
+        for path in self.rootPaths.values():
+            shutil.rmtree(path, ignore_errors=True)
+        super().tearDown()

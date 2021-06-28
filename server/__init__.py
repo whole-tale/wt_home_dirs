@@ -115,7 +115,8 @@ def startDAVServer(rootPath, directoryInitializer, authorizer, pathMapper):
 
 def setDefaults():
     for (name, key) in [('home', PluginSettings.HOME_DIRS_ROOT),
-                        ('tale', PluginSettings.TALE_DIRS_ROOT)]:
+                        ('tale', PluginSettings.TALE_DIRS_ROOT),
+                        ('runs', PluginSettings.RUNS_DIRS_ROOT)]:
         if 'GIRDER_TEST_ASSETSTORE' in os.environ:
             # roots for testing; they need to be initialized here because the tests
             # would have to load the plugin first which would mean that this method
