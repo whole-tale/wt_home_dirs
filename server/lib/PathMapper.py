@@ -122,3 +122,30 @@ class TalePathMapper(PathMapper):
 
     def isGirderRoot(self, path: pathlib.Path):
         return len(path.parts) == 5
+
+
+class RunsPathMapper(PathMapper):
+    run_to_tale = dict()  # mutable for a reason...
+
+    def davToPhysical(self, path: Union[pathlib.PurePosixPath, str]) -> str:
+        path = self._toPosixPurePath(path)
+        if path.is_absolute():
+            run_id = path.parts[1]
+            remainder = path.parts[2:]
+        else:
+            run_id = path.parts[0]
+            remainder = path.parts[1:]
+        path = self.run_to_tale[path.parts[1]] + "/" + run_id + "/workspace"
+        if remainder:
+            path += "/" + "/".join(remainder)
+        path = self._toPosixPurePath(path)
+        return self.addPrefix(path, 2).as_posix()
+
+    def getSubdir(self, environ: dict) -> pathlib.PurePosixPath:
+        self.run_to_tale[environ["WT_DAV_RUN_ID"]] = environ["WT_DAV_TALE_ID"]
+        path_base = f"{environ['WT_DAV_TALE_ID']}/{environ['WT_DAV_RUN_ID']}/workspace"
+        path = self.addPrefix(pathlib.PurePosixPath(path_base), 2)
+        return path
+
+    def getRealm(self):
+        return "runs"

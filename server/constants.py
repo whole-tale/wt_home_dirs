@@ -7,3 +7,4 @@ WORKSPACE_NAME = "WholeTale Workspaces"
 class PluginSettings:
     HOME_DIRS_ROOT = "wthome.homedir_root"
     TALE_DIRS_ROOT = "wthome.taledir_root"
+    RUNS_DIRS_ROOT = "wtversioning.runs_root"  # FIXME
