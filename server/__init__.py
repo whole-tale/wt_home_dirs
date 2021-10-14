@@ -159,8 +159,7 @@ def setTaleFolderMapping(event: events.Event):
     workspace.update({'fsPath': absDir.as_posix(), 'isMapping': True})
     Folder().save(workspace, validate=True, triggerEvents=False)
     tale["workspaceId"] = workspace["_id"]
-    tale = Tale().save(tale)
-    event.addResponse(tale)
+    tale = Tale().save(tale, triggerEvents=False, validate=False)
 
 
 def deleteWorkspace(event: events.Event):
