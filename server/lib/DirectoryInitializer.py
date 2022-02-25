@@ -1,6 +1,6 @@
 from wsgidav.middleware import BaseMiddleware
 import os
-from .PathMapper import HomePathMapper, TalePathMapper
+from .PathMapper import HomePathMapper, TalePathMapper, RunsPathMapper
 
 
 class DirectoryInitializer(BaseMiddleware):
@@ -40,3 +40,8 @@ class HomeDirectoryInitializer(DirectoryInitializer):
 class TaleDirectoryInitializer(DirectoryInitializer):
     def __init__(self, application, config):
         DirectoryInitializer.__init__(self, application, config, TalePathMapper())
+
+
+class RunsDirectoryInitializer(DirectoryInitializer):
+    def __init__(self, application, config):
+        DirectoryInitializer.__init__(self, application, config, RunsPathMapper())

@@ -1,5 +1,6 @@
 from wsgidav.middleware import BaseMiddleware
 from wsgidav import compat, util
+from girder.models.folder import Folder
 from girder.utility.model_importer import ModelImporter
 from girder.constants import AccessType
 from girder.exceptions import AccessException, ValidationException
@@ -109,6 +110,39 @@ class TaleAuthorizer(Authorizer):
 
     def getTaleId(self, path: pathlib.Path):
         return path.parts[1]
+
+    def isReadOp(self, environ):
+        return environ['REQUEST_METHOD'] in DAV_READ_OPS
+
+
+class RunsAuthorizer(Authorizer):
+
+    def _checkAccess(self, userName, spath: str, environ, start_response):
+        path = pathlib.Path(spath)
+
+        if len(path.parts) < 2:
+            body = self.buildNotAuthorizedResponseBody(userName, path)
+            return self.sendNotAuthorizedResponse(body, environ, start_response)
+
+        runId = path.parts[1]
+        user = environ['WT_DAV_USER_DICT']
+
+        if self.isReadOp(environ):
+            access_level = AccessType.READ
+        else:
+            access_level = AccessType.WRITE
+
+        try:
+            run_dir = Folder().load(runId, user=user, level=access_level, exc=True)
+            parent = Folder().load(run_dir["parentId"], user=user, level=access_level, exc=True)
+        except (AccessException, ValidationException):
+            body = self.buildNotAuthorizedResponseBody(userName, path)
+            return self.sendNotAuthorizedResponse(body, environ, start_response)
+
+        environ['WT_DAV_RUN_DICT'] = run_dir
+        environ['WT_DAV_RUN_ID'] = str(run_dir["_id"])
+        environ['WT_DAV_TALE_ID'] = parent["name"]
+        return self.application(environ, start_response)
 
     def isReadOp(self, environ):
         return environ['REQUEST_METHOD'] in DAV_READ_OPS
