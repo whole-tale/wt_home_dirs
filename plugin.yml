@@ -1,5 +1,5 @@
 name: WholeTale Home Directory Plugin
 description: Uses WsgiDAV to provide a WebDAV-accessible directory for each user
-version: 1.1rc1
+version: 1.1rc2
 dependencies:
     - wholetale
