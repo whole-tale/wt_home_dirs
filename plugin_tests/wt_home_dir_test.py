@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import mock
 import os
 import pathlib
 import shutil
@@ -797,7 +798,12 @@ class IntegrationTestCase(base.TestCase):
             self.assertStatusOk(resp)
             self.assertFalse(os.path.isdir(fAbsPath))
 
-    def test14RunDir(self):
+    @mock.patch("girder.plugins.wholetale.lib.manifest.ImageBuilder")
+    def test14RunDir(self, mock_builder):
+        mock_builder.return_value.container_config.repo2docker_version = (
+            "craigwillis/repo2docker:latest"
+        )
+        mock_builder.return_value.get_tag.return_value = "some_image_digest"
         resp = self.request(
             path="/version", method="POST", user=self.user,
             params={"taleId": self.privateTale["_id"]}
