@@ -1,3 +1,7 @@
+> [!IMPORTANT]
+> This repository is deprecated and no longer maintained. Most of the functionality offered by
+> this plugin was incorporated into [girder-wholetale](https://github.com/whole-tale/girder-wholetale).
+
 # WholeTale Home Dirs
 
 This is a Girder plugin that adds user home directory capability accessible
